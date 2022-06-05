@@ -258,7 +258,7 @@ CREATE VIEW analysis.Orders AS SELECT * FROM production.Orders;
 ## 2.2 Напишем SQL-запрос для создания и заполнения analysis.orders с учетом всех изменений:**
 
 ```SQL
-drop view analysis.Orders; 
+DROP VIEW analysis.Orders; 
 
 CREATE OR REPLACE VIEW analysis.Orders AS
 
