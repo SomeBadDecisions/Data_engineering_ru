@@ -84,7 +84,24 @@ inner join analysis.tmp_rfm_monetary_value m
 
 
 ```
+## 2.1 Изменение структуры витрины
 
+По условиям задачи, во втором задании структура данных в схеме production обновилась: в таблице Orders больше нет поля статуса. А это поле необходимо, потому что для анализа нужно выбрать только успешно выполненные заказы со статусом closed.
+Вместо поля с одним статусом разработчики добавили таблицу для журналирования всех изменений статусов заказов — **production.OrderStatusLog.**
 
+Структура таблицы **production.OrderStatusLog:**
 
+id — синтетический автогенерируемый идентификатор записи,
+order_id — идентификатор заказа, внешний ключ на таблицу production.Orders,
+status_id — идентификатор статуса, внешний ключ на таблицу статусов заказов production.OrderStatuses,
+dttm — дата и время получения заказом этого статуса.
+Необходимо внести изменения в то, как формируется представление **analysis.Orders**: вернуть в него поле status. Значение в этом поле должно соответствовать последнему по времени статусу из таблицы **production.OrderStatusLog.**
+
+```SQL
+DROP VIEW IF EXISTS analysis.Orders;
+
+ALTER TABLE production.Orders DROP COLUMN status;
+
+CREATE VIEW analysis.Orders AS SELECT * FROM production.Orders;
+```
 
