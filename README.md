@@ -44,15 +44,18 @@
 ## 1.3. Проанализируем качество данных
 
 В полях, используемых для построения витрины нет NULL-ов и дублей, т.к. при построении витрины были установлены ограничения на содержимоей полей.
-Для таблицы заданы:
- - PRIMARY KEY
- - NOT NULL constraint
- - Дополнительно задано, что стоимость заказака должна равняться сумме оплаты + бонусам
+Подробно ограничения указаны ниже:
  
- First Header  | Second Header
-------------- | -------------
-Content Cell  | Content Cell
-Content Cell  | Content Cell
+ Table.column  | Constraint
+------------- | ------------- 
+orders.order_ts  | NOT NULL  
+orders.user_id  | NOT NULL
+orders.cost  | NOT NULL; CHECK ((cost = (payment + bonus_payment)))  
+orders.order_id  | NOT NULL; PRIMARY KEY
+orders.status | NOT NULL  
+orderstatuses.id  | NOT NULL; PRIMARY KEY
+orderstatuses.key  | NOT NULL  
+users.id  | NOT NULL; PRIMARY KEY
 
 ## 1.4.1. Сделаем VIEW для таблиц из базы production (по условию задачи, в коде витрины обращаться можно только к схеме analysis).
 
