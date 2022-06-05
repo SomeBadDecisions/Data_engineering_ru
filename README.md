@@ -41,7 +41,7 @@
  - NOT NULL constraint
  - Дополнительно задано, что стоимость заказака должна равняться сумме оплаты + бонусам
 
-## 1.4.1. Сделаем VIEW для таблиц из базы production (по условию задачи, в коде витрины обращаться можно только к схеме analysis).**
+## 1.4.1. Сделаем VIEW для таблиц из базы production (по условию задачи, в коде витрины обращаться можно только к схеме analysis).
 
 ```SQL
 create view analysis.orderitems as select * from production.orderitems;
@@ -51,7 +51,7 @@ create view analysis.products as select * from production.products;
 create view analysis.users as select * from production.users;
 ```
 
-## 1.4.2. Напишем DDL-запрос для создания витрины.**
+## 1.4.2. Напишем DDL-запрос для создания витрины.
 
 ```SQL
 CREATE TABLE analysis.dm_rfm_segments (
