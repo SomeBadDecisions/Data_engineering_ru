@@ -27,9 +27,6 @@
 		- order_id - ID заказа
 		- status - код статуса заказа 
 		
-		
-	
-	
 	production.orderstatuses:
 	
 		- id - ID статуса заказа 
