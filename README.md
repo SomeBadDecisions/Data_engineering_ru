@@ -255,7 +255,7 @@ ALTER TABLE production.Orders DROP COLUMN status;
 CREATE VIEW analysis.Orders AS SELECT * FROM production.Orders;
 ```
 
-## 2.2 Напишем SQL-запрос для создания и заполнения analysis.orders с учетом всех изменений:**
+## 2.2 Напишем SQL-запрос для создания и заполнения analysis.orders с учетом всех изменений:
 
 ```SQL
 DROP VIEW analysis.Orders; 
