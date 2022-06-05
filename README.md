@@ -36,6 +36,10 @@
 - id - ID статуса заказа 
 - key - наименование статуса заказа 
 
+**production.users:**
+
+- id - ID клиента
+
 
 ## 1.3. Проанализируем качество данных
 
@@ -44,10 +48,14 @@
  - PRIMARY KEY
  - NOT NULL constraint
  - Дополнительно задано, что стоимость заказака должна равняться сумме оплаты + бонусам
+ Attempt | #1 | #2 | #3 | #4 | #5 | #6 | #7 | #8 | #9 | #10 | #11
+--- | --- | --- | --- |--- |--- |--- |--- |--- |--- |--- |---
+Seconds | 301 | 283 | 290 | 286 | 289 | 285 | 287 | 287 | 272 | 276 | 269
 
 ## 1.4.1. Сделаем VIEW для таблиц из базы production (по условию задачи, в коде витрины обращаться можно только к схеме analysis).
 
 ```SQL
+create or replace view analysis.orders as select * from production.orders;
 create or replace view analysis.orderitems as select * from production.orderitems;
 create or replace view analysis.orderstatuses as select * from production.orderstatuses;
 create or replace view analysis.orderstatuslog as select * from production.orderstatuslog;
