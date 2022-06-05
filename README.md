@@ -19,7 +19,7 @@
 
 В качестве источников будем использовать следующие таблицы и их поля:
 
-	production.orders:
+**production.orders:**
 	
 - order_ts - дата и время заказа
 - user_id - ID пользователя
@@ -27,7 +27,7 @@
 - order_id - ID заказа
 - status - код статуса заказа 
 		
-	production.orderstatuses:
+**production.orderstatuses:**
 	
 - id - ID статуса заказа 
 - key - наименование статуса заказа 
