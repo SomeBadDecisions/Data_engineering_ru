@@ -106,13 +106,16 @@ frequency)
 SELECT * FROM (
 with pre as (
 select 
-user_id 
+t0.id as user_id 
 ,count(order_id) as metric
-from analysis.orders t1
-inner join analysis.orderstatuses t2 on t1.status = t2.id 
-									 and t2.key ='Closed'
+from analysis.users t0
+left join analysis.orders t1
+	on t0.id = t1.user_id 
+left join analysis.orderstatuses t2 
+	on t1.status = t2.id 
+	and t2.key ='Closed'
 where (extract('year' from order_ts)) >= 2021								 
-group by user_id 
+group by 1 
 ),
 
 prct as 
@@ -127,11 +130,11 @@ from pre
 select 
 user_id,
 case when metric <= (select "1" from prct) then 1
-	 when metric >= (select "1" from prct)
+	 when metric > (select "1" from prct)
 	 	and metric <=(select "2" from prct) then 2
-	 when metric >= (select "2" from prct)
+	 when metric > (select "2" from prct)
 	 	and metric <=(select "3" from prct) then 3
-	 when metric >= (select "3" from prct)
+	 when metric > (select "3" from prct)
 	 	and metric <=(select "4" from prct) then 4
 	 else 5 end as metric
 from pre 
@@ -148,13 +151,15 @@ monetary_value)
 SELECT * FROM (
 with pre as (
 select 
-user_id 
+t0.id as user_id 
 ,sum(cost) as metric
-from analysis.orders t1
-inner join analysis.orderstatuses t2 on t1.status = t2.id 
-									 and t2.key ='Closed'
+left join analysis.orders t1
+	on t0.id = t1.user_id 
+left join analysis.orderstatuses t2 
+	on t1.status = t2.id 
+	and t2.key ='Closed'
 where (extract('year' from order_ts)) >= 2021								 
-group by user_id 
+group by 1 
 ),
 
 prct as 
@@ -169,11 +174,11 @@ from pre
 select 
 user_id,
 case when metric <= (select "1" from prct) then 1
-	 when metric >= (select "1" from prct)
+	 when metric > (select "1" from prct)
 	 	and metric <=(select "2" from prct) then 2
-	 when metric >= (select "2" from prct)
+	 when metric > (select "2" from prct)
 	 	and metric <=(select "3" from prct) then 3
-	 when metric >= (select "3" from prct)
+	 when metric > (select "3" from prct)
 	 	and metric <=(select "4" from prct) then 4
 	 else 5 end as metric
 from pre 
@@ -190,13 +195,16 @@ recency)
 SELECT * FROM (
 with lt_dt as (
 select 
-user_id 
+t0.id as user_id
 , max(order_ts) as latest_order
-from analysis.orders t1
-inner join analysis.orderstatuses t2 on t1.status = t2.id 
-									 and t2.key ='Closed'
+from analysis.users t0
+left join analysis.orders t1
+	on t0.id = t1.user_id 
+left join analysis.orderstatuses t2 
+	on t1.status = t2.id 
+	and t2.key ='Closed'
 where (extract('year' from order_ts)) >= 2021								 
-group by user_id 
+group by 1 
 ),
 
 prct_dt as 
@@ -211,11 +219,11 @@ from lt_dt
 select 
 user_id,
 case when latest_order <= (select "1" from prct_dt) then 1
-	 when latest_order >= (select "1" from prct_dt)
+	 when latest_order > (select "1" from prct_dt)
 	 	and latest_order <=(select "2" from prct_dt) then 2
-	 when latest_order >= (select "2" from prct_dt)
+	 when latest_order > (select "2" from prct_dt)
 	 	and latest_order <=(select "3" from prct_dt) then 3
-	 when latest_order >= (select "3" from prct_dt)
+	 when latest_order > (select "3" from prct_dt)
 	 	and latest_order <=(select "4" from prct_dt) then 4
 	 else 5 end as freq
 from lt_dt 
