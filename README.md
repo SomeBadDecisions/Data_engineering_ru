@@ -4,7 +4,7 @@
 Это поможет оптимизировать нагрузку на хранилище и позволит аналитикам отвечать на точечные вопросы о тарифах вендоров.
 На текущий момент основная информация находится в таблице *shipping*. Так как в ней находится, по сути, весь лог доставки от момента оформления до выдачи заказа, данные несистематизированны и, более того, могут дублироваться.
 
-**As is:**
+## 1.1 As is:
 <img width="1464" alt="AS_IS" src="https://user-images.githubusercontent.com/63814959/174645196-b37a7492-a730-41e8-8e00-51afb5d657cd.png">
 
 **Название основной витрины:** shipping
@@ -52,5 +52,72 @@ shippingid |	saleid|	orderid	|clientid|	payment|	state_datetime|	productid|	desc
 4|	4|	6682|	61662|	8.57|	21:32.4|	174|	food&healh vendor_3 from russia|	3|	food&healh|	russia|	in_progress|	booked|	14:30.1|	185.87|	1p:train|	0.025|	germany|	0.01|	3:vspn-3023:0.05:0.01
 5|	5|	25922|	238974|	1.5|	47:46.1|	135|	food&healh vendor_3 from russia|	3|	food&healh|	russia|	in_progress|	booked|	21:08.8|	102.55|	1p:train|	0.025|	norway|	0.04|	3:vspn-3023:0.05:0.01
 
-**To be:**
+**DDL таблицы**
+
+```SQL
+DROP TABLE IF EXISTS public.shipping;
+
+
+
+--shipping
+CREATE TABLE public.shipping(
+   ID serial ,
+   shippingid                         BIGINT,
+   saleid                             BIGINT,
+   orderid                            BIGINT,
+   clientid                           BIGINT,
+   payment_amount                          NUMERIC(14,2),
+   state_datetime                    TIMESTAMP,
+   productid                          BIGINT,
+   description                       text,
+   vendorid                           BIGINT,
+   namecategory                      text,
+   base_country                      text,
+   status                            text,
+   state                             text,
+   shipping_plan_datetime            TIMESTAMP,
+   hours_to_plan_shipping           NUMERIC(14,2),
+   shipping_transfer_description     text,
+   shipping_transfer_rate           NUMERIC(14,3),
+   shipping_country                  text,
+   shipping_country_base_rate       NUMERIC(14,3),
+   vendor_agreement_description      text,
+   PRIMARY KEY (ID)
+);
+CREATE INDEX shippingid ON public.shipping (shippingid);
+COMMENT ON COLUMN public.shipping.shippingid is 'id of shipping of sale';
+```
+
+## 1.2 To be:
 <img width="1475" alt="TO_BE" src="https://user-images.githubusercontent.com/63814959/174645334-0c200e6c-a5bd-4963-a2a5-64c1119e5c93.png">
+
+## 2.1 Создадим справочник стоимости доставки в разные страны:
+
+Наименование справочника: shipping_country_rates
+Источники: shipping_country, shipping_country_base_rate
+
+```SQL
+create table shipping_country_rates (
+ID serial,
+shipping_country text,
+shipping_country_base_rate numeric(14,3)
+);
+
+create sequence ship_rt_id_seq start 1;
+
+insert into shipping_country_rates
+(id, shipping_country, shipping_country_base_rate)
+select  
+nextval('ship_rt_id_seq') as id  
+,shipping_country
+,shipping_country_base_rate 
+from (select distinct shipping_country, shipping_country_base_rate 
+	  from shipping) subq;
+
+drop sequence ship_rt_id_seq;
+```
+
+##2.2 Создадим справочник тарифов доставки вендора:
+
+Наименование справочника: shipping_agreement
+Источник: vendor_agreement_description
