@@ -117,7 +117,7 @@ from (select distinct shipping_country, shipping_country_base_rate
 drop sequence ship_rt_id_seq;
 ```
 
-##2.2 Создадим справочник тарифов доставки вендора:
+## 2.2 Создадим справочник тарифов доставки вендора:
 
 Наименование справочника: shipping_agreement
 Источник: vendor_agreement_description
