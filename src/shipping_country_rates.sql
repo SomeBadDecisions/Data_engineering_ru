@@ -1,7 +1,8 @@
 create table shipping_country_rates (
 ID serial,
 shipping_country text,
-shipping_country_base_rate numeric(14,3)
+shipping_country_base_rate numeric(14,3),
+primary key (ID)
 );
 
 create sequence ship_rt_id_seq start 1;
