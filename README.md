@@ -93,8 +93,9 @@ COMMENT ON COLUMN public.shipping.shippingid is 'id of shipping of sale';
 
 ## 2.1 Создадим справочник стоимости доставки в разные страны:
 
-Наименование справочника: shipping_country_rates
-Источники: shipping_country, shipping_country_base_rate
+**Наименование справочника:** shipping_country_rates
+
+**Источники:** shipping_country, shipping_country_base_rate
 
 ```SQL
 create table shipping_country_rates (
@@ -120,8 +121,9 @@ drop sequence ship_rt_id_seq;
 
 ## 2.2 Создадим справочник тарифов доставки вендора:
 
-Наименование справочника: shipping_agreement
-Источник: vendor_agreement_description
+**Наименование справочника:** shipping_agreement
+
+**Источник:** vendor_agreement_description
 
 ```SQL
 create table shipping_agreement (
