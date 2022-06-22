@@ -145,3 +145,73 @@ from (select regexp_split_to_array(vendor_agreement_description, E'\\:+') as des
 	  from shipping ) subq;
 ```
 
+## 2.3 Создадим справочник типов доставки:
+
+**Наименование справочника:** shipping_transfer
+
+**Источник:** shipping_transfer_description, shipping_transfer_rate 
+
+```SQL
+create table shipping_transfer (
+id serial,
+transfer_type text,
+transfer_model text,
+shipping_transfer_rate numeric(14,3),
+primary key(id)
+);
+
+insert into shipping_transfer 
+(transfer_type, transfer_model, shipping_transfer_rate)
+select distinct 
+descr[1] as transfer_type
+,descr[2] as transfer_model
+,shipping_transfer_rate
+from(select 
+	 regexp_split_to_array(shipping_transfer_description, E'\\:+') as descr 
+	 ,shipping_transfer_rate 
+	 from shipping) subq ; 
+```
+
+## 2.4 Создадим витрину с уникальными доставками:
+
+**Наименование витрины:** shipping_info
+
+**Источники:** shippingid, shipping_plan_datetime, payment_aount, vendorid
+
+**FK на справочники:** shipping_country_rates, shipping_agreement, shipping_transfer 
+
+```SQL
+create table shipping_info(
+shippingid bigint,
+shipping_country_rates_id bigint,
+shipping_agreement_id bigint,
+shipping_transfer_id bigint,
+shipping_plan_datetime timestamp,
+payment_amount numeric(14,2),
+vendorid bigint,
+primary key (shippingid),
+foreign key (shipping_country_rates_id) references shipping_country_rates(id) on update cascade,
+foreign key (shipping_agreement_id) references shipping_agreement(agreementid) on update cascade,
+foreign key (shipping_transfer_id) references shipping_transfer(id) on update cascade
+);
+
+insert into shipping_info
+(shippingid, shipping_country_rates_id, shipping_agreement_id,
+ shipping_transfer_id, shipping_plan_datetime, payment_amount, vendorid)
+ select 
+ s.shippingid
+ ,scr.id as shipping_country_rates_id
+ ,sa.agreementid as shipping_agreement_id
+ ,st.id as shipping_transfer_id
+ ,s.shipping_plan_datetime
+ ,s.payment_amount
+ ,s.vendorid  
+ from shipping s 
+ inner join shipping_country_rates scr
+ 	on s.shipping_country = scr.shipping_country
+ inner join shipping_agreement sa 
+ 	on cast((regexp_split_to_array(s.vendor_agreement_description, E'\\:+'))[1] as integer) = sa.agreementid
+ inner join shipping_transfer st 
+ 	on s.shipping_transfer_description = st.transfer_type || ':' || st.transfer_model
+ group by 1,2,3,4,5,6,7
+```
