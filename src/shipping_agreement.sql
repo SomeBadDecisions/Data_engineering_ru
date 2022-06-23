@@ -1,3 +1,7 @@
+DROP TABLE IF EXISTS shipping_agreement;
+
+
+-- shipping_agreement
 create table shipping_agreement (
 agreementid BIGINT,
 agreement_number text,

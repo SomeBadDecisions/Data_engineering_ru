@@ -1,3 +1,6 @@
+drop table if exists shipping_info;
+
+--shipping_info
 create table shipping_info(
 shippingid bigint,
 shipping_country_id bigint,

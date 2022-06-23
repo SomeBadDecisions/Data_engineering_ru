@@ -1,3 +1,6 @@
+drop table if exists shipping_transfer;
+
+--shipping_transfer
 create table shipping_transfer (
 transfer_type_id serial,
 transfer_type text,

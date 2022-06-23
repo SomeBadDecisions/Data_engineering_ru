@@ -1,3 +1,6 @@
+drop table if exists shipping_country_rates;
+
+--shipping_country)rates
 create table shipping_country_rates (
 shipping_country_id serial,
 shipping_country text,

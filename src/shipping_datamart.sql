@@ -9,7 +9,7 @@ si.shippingid
 ,case when ss.shipping_end_fact_datetime > si.shipping_plan_datetime 
 	  then date_part('day', ss.shipping_end_fact_datetime - si.shipping_plan_datetime) end as delay_day_at_shipping
 ,si.payment_amount 
-,si.payment_amount * (scr.shipping_country_base_rate + sa.agreement_rate + scr.shipping_country_base_rate) as vat
+,si.payment_amount * (scr.shipping_country_base_rate + sa.agreement_rate + st.shipping_transfer_rate) as vat
 ,si.payment_amount  * sa.agreement_comission as profit
 from shipping_info si
 left join shipping_status ss
@@ -19,4 +19,4 @@ left join shipping_transfer st
 left join shipping_country_rates scr 
 	on si.shipping_country_id = scr.shipping_country_id
 left join shipping_agreement sa 
-	on si.agreementid = sa.agreementid
+	on si.agreementid = sa.agreementid;

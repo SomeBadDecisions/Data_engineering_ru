@@ -1,3 +1,6 @@
+drop table if exists shipping_status;
+
+--shipping_status
 create table shipping_status(
 shippingid bigint,
 status text,

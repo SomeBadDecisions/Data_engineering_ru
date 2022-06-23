@@ -98,6 +98,9 @@ COMMENT ON COLUMN public.shipping.shippingid is 'id of shipping of sale';
 **Источники:** shipping_country, shipping_country_base_rate
 
 ```SQL
+drop table if exists shipping_country_rates;
+
+--shipping_country)rates
 create table shipping_country_rates (
 shipping_country_id serial,
 shipping_country text,
@@ -121,6 +124,10 @@ from shipping;
 **Источник:** vendor_agreement_description
 
 ```SQL
+DROP TABLE IF EXISTS shipping_agreement;
+
+
+-- shipping_agreement
 create table shipping_agreement (
 agreementid BIGINT,
 agreement_number text,
@@ -147,6 +154,9 @@ from (select regexp_split_to_array(vendor_agreement_description, E'\\:+') as des
 **Источник:** shipping_transfer_description, shipping_transfer_rate 
 
 ```SQL
+drop table if exists shipping_transfer;
+
+--shipping_transfer
 create table shipping_transfer (
 transfer_type_id serial,
 transfer_type text,
@@ -176,6 +186,9 @@ from(select
 **FK на справочники:** shipping_country_rates, shipping_agreement, shipping_transfer 
 
 ```SQL
+drop table if exists shipping_info;
+
+--shipping_info
 create table shipping_info(
 shippingid bigint,
 shipping_country_id bigint,
@@ -223,6 +236,9 @@ insert into shipping_info
 - *shipping_end_fact_datetime* — это время state_datetime , когда state заказа перешёл в состояние received.
 
 ```SQL
+drop table if exists shipping_status;
+
+--shipping_status
 create table shipping_status(
 shippingid bigint,
 status text,
@@ -287,7 +303,7 @@ si.shippingid
 ,case when ss.shipping_end_fact_datetime > si.shipping_plan_datetime 
 	  then date_part('day', ss.shipping_end_fact_datetime - si.shipping_plan_datetime) end as delay_day_at_shipping
 ,si.payment_amount 
-,si.payment_amount * (scr.shipping_country_base_rate + sa.agreement_rate + scr.shipping_country_base_rate) as vat
+,si.payment_amount * (scr.shipping_country_base_rate + sa.agreement_rate + st.shipping_transfer_rate) as vat
 ,si.payment_amount  * sa.agreement_comission as profit
 from shipping_info si
 left join shipping_status ss
@@ -297,7 +313,7 @@ left join shipping_transfer st
 left join shipping_country_rates scr 
 	on si.shipping_country_id = scr.shipping_country_id
 left join shipping_agreement sa 
-	on si.agreementid = sa.agreementid 
+	on si.agreementid = sa.agreementid;
 ```
 
 ## Итог
