@@ -99,24 +99,19 @@ COMMENT ON COLUMN public.shipping.shippingid is 'id of shipping of sale';
 
 ```SQL
 create table shipping_country_rates (
-ID serial,
+shipping_country_id serial,
 shipping_country text,
 shipping_country_base_rate numeric(14,3),
-primary key (ID)
+primary key (shipping_country_id)
 );
 
-create sequence ship_rt_id_seq start 1;
 
 insert into shipping_country_rates
-(id, shipping_country, shipping_country_base_rate)
-select  
-nextval('ship_rt_id_seq') as id  
-,shipping_country
+(shipping_country, shipping_country_base_rate)
+select distinct    
+shipping_country
 ,shipping_country_base_rate 
-from (select distinct shipping_country, shipping_country_base_rate 
-	  from shipping) subq;
-
-drop sequence ship_rt_id_seq;
+from shipping;
 ```
 
 ## 2.2 Создадим справочник тарифов доставки вендора:
@@ -153,11 +148,11 @@ from (select regexp_split_to_array(vendor_agreement_description, E'\\:+') as des
 
 ```SQL
 create table shipping_transfer (
-id serial,
+transfer_type_id serial,
 transfer_type text,
 transfer_model text,
 shipping_transfer_rate numeric(14,3),
-primary key(id)
+primary key(transfer_type_id)
 );
 
 insert into shipping_transfer 
@@ -183,26 +178,26 @@ from(select
 ```SQL
 create table shipping_info(
 shippingid bigint,
-shipping_country_rates_id bigint,
-shipping_agreement_id bigint,
-shipping_transfer_id bigint,
+shipping_country_id bigint,
+agreementid bigint,
+transfer_type_id bigint,
 shipping_plan_datetime timestamp,
 payment_amount numeric(14,2),
 vendorid bigint,
 primary key (shippingid),
-foreign key (shipping_country_rates_id) references shipping_country_rates(id) on update cascade,
-foreign key (shipping_agreement_id) references shipping_agreement(agreementid) on update cascade,
-foreign key (shipping_transfer_id) references shipping_transfer(id) on update cascade
+foreign key (shipping_country_id) references shipping_country_rates(shipping_country_id) on update cascade,
+foreign key (agreementid) references shipping_agreement(agreementid) on update cascade,
+foreign key (transfer_type_id) references shipping_transfer(transfer_type_id) on update cascade
 );
 
 insert into shipping_info
-(shippingid, shipping_country_rates_id, shipping_agreement_id,
- shipping_transfer_id, shipping_plan_datetime, payment_amount, vendorid)
+(shippingid, shipping_country_id, agreementid,
+ transfer_type_id, shipping_plan_datetime, payment_amount, vendorid)
  select 
  s.shippingid
- ,scr.id as shipping_country_rates_id
- ,sa.agreementid as shipping_agreement_id
- ,st.id as shipping_transfer_id
+ ,scr.shipping_country_id 
+ ,sa.agreementid 
+ ,st.transfer_type_id
  ,s.shipping_plan_datetime
  ,s.payment_amount
  ,s.vendorid  
@@ -213,5 +208,99 @@ insert into shipping_info
  	on cast((regexp_split_to_array(s.vendor_agreement_description, E'\\:+'))[1] as integer) = sa.agreementid
  inner join shipping_transfer st 
  	on s.shipping_transfer_description = st.transfer_type || ':' || st.transfer_model
- group by 1,2,3,4,5,6,7
+ group by 1,2,3,4,5,6,7 
 ```
+
+## 2.5 Создадим витрину статусов доставки:
+
+**Наименование витрины:** shipping_status
+
+**Источники:** shippingid, status, state, state_datetime
+
+**Доп.инфо**:
+- Данные в таблице должны отражать максимальный status и state по максимальному времени лога state_datetime в таблице shipping.
+- *shipping_start_fact_datetime* — это время state_datetime, когда state заказа перешёл в состояние booked.
+- *shipping_end_fact_datetime* — это время state_datetime , когда state заказа перешёл в состояние received.
+
+```SQL
+create table shipping_status(
+shippingid bigint,
+status text,
+state text,
+shipping_start_fact_datetime timestamp,
+shipping_end_fact_datetime timestamp,
+primary key(shippingid)
+);
+
+insert into shipping_status
+(shippingid, status, state, shipping_start_fact_datetime,
+ shipping_end_fact_datetime)
+ 
+ with max_dttm as (
+ select 
+ shippingid
+ ,max(state_datetime) as max_state_dttm
+ ,max(case when state = 'booked' then state_datetime end) as shipping_start_fact_datetime
+ ,max(case when state = 'recieved' then state_datetime end) as shipping_end_fact_datetime
+ from shipping s 
+ group by 1
+ )
+ 
+ select 
+ t1.shippingid
+ ,t2.status
+ ,t2.state 
+ ,t1.shipping_start_fact_datetime
+ ,t1.shipping_end_fact_datetime
+ from max_dttm t1
+ inner join shipping t2
+ 	on t1.shippingid = t2.shippingid 
+ 	and t1.max_state_dttm = t2.state_datetime;
+```
+
+## 3.1 Создадим итоговое представление:
+
+**Наименование представления:** shipping_datamart
+
+**Список полей:** 
+
+- shippingid
+- vendorid
+- transfer_type — тип доставки из таблицы shipping_transfer
+- full_day_at_shipping — количество полных дней, в течение которых длилась доставка. Высчитывается как:shipping_end_fact_datetime-shipping_start_fact_datetime.
+- is_delay — статус, показывающий просрочена ли доставка. Высчитывается как:shipping_end_fact_datetime >> shipping_plan_datetime → 1 ; 0
+- is_shipping_finish — статус, показывающий, что доставка завершена. Если финальный status = finished → 1; 0
+- delay_day_at_shipping — количество дней, на которые была просрочена доставка. Высчитыается как: shipping_end_fact_datetime >> shipping_end_plan_datetime → shipping_end_fact_datetime -− shipping_plan_datetime ; 0).
+- payment_amount — сумма платежа пользователя
+- vat — итоговый налог на доставку. Высчитывается как: payment_amount *∗ ( shipping_country_base_rate ++ agreement_rate ++ shipping_transfer_rate) .
+- profit — итоговый доход компании с доставки. Высчитывается как: payment_amount*∗ agreement_commission.
+
+```SQL
+create or replace view shipping_datamart as 
+select 
+si.shippingid
+,si.vendorid
+,st.transfer_type
+,date_part('day',ss.shipping_end_fact_datetime - ss.shipping_start_fact_datetime) as full_day_at_shipping
+,case when ss.shipping_end_fact_datetime > si.shipping_plan_datetime then 1 else 0 end as is_delay
+,case when ss.status = 'finished' then 1 else 0 end as is_shipping_finish
+,case when ss.shipping_end_fact_datetime > si.shipping_plan_datetime 
+	  then date_part('day', ss.shipping_end_fact_datetime - si.shipping_plan_datetime) end as delay_day_at_shipping
+,si.payment_amount 
+,si.payment_amount * (scr.shipping_country_base_rate + sa.agreement_rate + scr.shipping_country_base_rate) as vat
+,si.payment_amount  * sa.agreement_comission as profit
+from shipping_info si
+left join shipping_status ss
+	on si.shippingid = ss.shippingid 
+left join shipping_transfer st
+	on si.transfer_type_id = st.transfer_type_id
+left join shipping_country_rates scr 
+	on si.shipping_country_id = scr.shipping_country_id
+left join shipping_agreement sa 
+	on si.agreementid = sa.agreementid 
+```
+
+## Итог
+
+Существующая модель данных была переботана. С подобной моделью данных интернет-магазин может продолжать расширение не опасаясь высокой нагрузки на базу данных.
+Подготовлено представление для аналитиков с готовыми расчетными показателями, которые позволят ускорить их работу. 
