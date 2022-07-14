@@ -18,11 +18,22 @@
 Новые инкременты с информацией о продажах приходят по API и содержат статус заказа (shipped/refunded).
 
 ## 1.2 Спецификация API 
-API-KEY 5f55e6c0-e9e5-4a9c-b313-63c01fc31460
+**API-KEY**: 5f55e6c0-e9e5-4a9c-b313-63c01fc31460
+Для обращения к API необходима утилита curl.
 
 ## 1.2.1 POST /generate_report
 Метод /generate_report инициализирует формирование отчёта. 
 Метод возвращает task_id — ID задачи, в результате выполнения которой должен сформироваться отчёт.
+
+Обращение к API с помощью curl:
+
+```console
+curl --location --request GET 'https://d5dg1j9kt695d30blp03.apigw.yandexcloud.net/get_report?task_id={{ task_id }}' \
+--header 'X-Nickname: MrK' \
+--header 'X-Cohort: 3' \
+--header 'X-Project: True' \
+--header 'X-API-KEY: {{ api_key }}' #вставить API-KEY без двойных скобок
+```
 
 ## 1.2.2 GET /get_report
 Метод get_report используется для получения отчёта после того, как он будет сформирован на сервере.
