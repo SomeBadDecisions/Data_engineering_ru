@@ -32,7 +32,8 @@ curl --location --request GET 'https://d5dg1j9kt695d30blp03.apigw.yandexcloud.ne
 --header 'X-Nickname: MrK' \
 --header 'X-Cohort: 3' \
 --header 'X-Project: True' \
---header 'X-API-KEY: {{ api_key }}' # вставить API-KEY без двойных скобок
+--header 'X-API-KEY: {{ api_key }}' 
+# вставить API-KEY без двойных скобок
 ```
 
 ## 1.2.2 GET /get_report
