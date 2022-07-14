@@ -28,7 +28,7 @@
 Обращение к API с помощью curl:
 
 ```console
-curl --location --request GET 'https://d5dg1j9kt695d30blp03.apigw.yandexcloud.net/get_report?task_id={{ task_id }}' \
+curl --location --request POST 'https://d5dg1j9kt695d30blp03.apigw.yandexcloud.net/generate_report' \
 --header 'X-Nickname: MrK' \
 --header 'X-Cohort: 3' \
 --header 'X-Project: True' \
@@ -40,6 +40,18 @@ curl --location --request GET 'https://d5dg1j9kt695d30blp03.apigw.yandexcloud.ne
 Метод get_report используется для получения отчёта после того, как он будет сформирован на сервере.
 Пока отчёт будет формироваться, будет возвращаться статус RUNNING.
 Если отчёт сформирован, то метод вернёт статус SUCCESS и report_id.
+
+Обращение к API с помощью curl:
+
+```console
+curl --location --request GET 'https://d5dg1j9kt695d30blp03.apigw.yandexcloud.net/get_report?task_id={{ task_id }}' \
+--header 'X-Nickname: MrK' \
+--header 'X-Cohort: 3' \
+--header 'X-Project: True' \
+--header 'X-API-KEY: {{ api_key }}'
+# вставить API-KEY без двойных скобок 
+```
+
 Сформированный отчёт содержит четыре файла:
 
 - custom_research.csv,
@@ -51,6 +63,18 @@ curl --location --request GET 'https://d5dg1j9kt695d30blp03.apigw.yandexcloud.ne
 ## 1.2.3 GET /get_increment
 Метод get_increment используется для получения данных за те даты, которые не вошли в основной отчёт. Дата обязательно в формате 2020-01-22T00:00:00.
 Если инкремент сформирован, то метод вернёт статус SUCCESS и increment_id. Если инкремент не сформируется, то вернётся NOT FOUND с описанием причины.
+
+Обращение к API с помощью curl:
+
+```console
+curl --location --request GET 'https://d5dg1j9kt695d30blp03.apigw.yandexcloud.net/get_increment?report_id={{ report_id }}&date={{ date }}' \
+--header 'X-Nickname: MrK' \
+--header 'X-Cohort: 3' \
+--header 'X-Project: True' \
+--header 'X-API-KEY: {{ api_key }}'
+# вставить API-KEY без двойных скобок 
+```
+
 Сформированный инкремент содержит четыре файла: 
 
 - custom_research_inc.csv 
