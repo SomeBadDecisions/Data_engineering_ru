@@ -83,7 +83,7 @@ curl --location --request GET 'https://d5dg1j9kt695d30blp03.apigw.yandexcloud.ne
 - price_log_inc.csv
 Файлы отчетов можно получить по URL из параметра s3_path.
 
-## 1.2.3 Текущий пайплайн в AirFlow
+## 1.2.4 Текущий пайплайн в AirFlow
 
 **DAG:**
 
@@ -108,7 +108,7 @@ base_url = http_conn_id.host
 postgres_conn_id = 'postgresql_de'
 
 nickname = 'MrK'
-cohort = 3
+cohort = '3'
 
 headers = {
     'X-Nickname': nickname,
@@ -185,8 +185,8 @@ def upload_data_to_staging(filename, date, pg_table, pg_schema, ti):
 
 
 args = {
-    "owner": "MrK",
-    'email': ['mrk@test.com'],
+    "owner": "student",
+    'email': ['student@example.com'],
     'email_on_failure': False,
     'email_on_retry': False,
     'retries': 0
@@ -256,8 +256,90 @@ with DAG(
 
 ```
 
+## 1.2.5 Текущие SQL-скрипты
+**mart.d_city:**
+```sql
+insert into mart.d_city (city_id, city_name)
+select city_id, city_name from staging.user_order_log
+where city_id not in (select city_id from mart.d_city)
+group by city_id, city_name;
+```
+
+**mart.d_customer:**
+```sql
+insert into mart.d_customer (customer_id, first_name, last_name, city_id)
+select customer_id, first_name, last_name, max(city_id) from staging.user_order_log
+where customer_id not in (select customer_id from mart.d_customer)
+group by customer_id, first_name, last_name
+```
+
+**mart.d_item:**
+```sql
+insert into mart.d_item (item_id, item_name)
+select item_id, item_name from staging.user_order_log
+where item_id not in (select item_id from mart.d_item)
+group by item_id, item_name
+```
+
+**mart.f_sales:**
+```sql
+insert into mart.f_sales (date_id, item_id, customer_id, city_id, quantity, payment_amount)
+select dc.date_id, item_id, customer_id, city_id, quantity, payment_amount from staging.user_order_log uol
+left join mart.d_calendar as dc on uol.date_time::Date = dc.date_actual
+where uol.date_time::Date = '{{ds}}';
+```
+
 ## 2.1 Добавление статуса заказа
 В рамках доработки необходимо: 
 
 - учесть в витрине mart.f_sales статусы shipped и refunded. Все данные в витрине следует считать shipped
 - обновить пайплайн с учётом статусов и backward compatibility
+
+Для выполнения условий добавим столбец **status** в таблицы **staging.user_order_log** и **mart.f_sales**:
+
+```sql
+alter table staging.user_order_log 
+add column status varchar(30) DEFAULT 'shipped';
+
+alter table mart.f_sales 
+add column status varchar(30) DEFAULT 'shipped';
+```
+
+Далее обновил функцию upload_data_to_staging. Избавимся от колонки с id, чтобы инкременты за разные даты не конфликтовали:
+
+```python
+def upload_data_to_staging(filename, date, pg_table, pg_schema, ti):
+    increment_id = ti.xcom_pull(key='increment_id')
+    s3_filename = f'https://storage.yandexcloud.net/s3-sprint3/cohort_{cohort}/{nickname}/project/{increment_id}/{filename}'
+
+    local_filename = date.replace('-', '') + '_' + filename
+
+    response = requests.get(s3_filename)
+    open(f"{local_filename}", "wb").write(response.content)
+
+    df = pd.read_csv(local_filename)
+    df = df.drop_duplicates(subset=['id'])
+    df = df.drop(['id'], axis = 1) #Новая строка
+
+    postgres_hook = PostgresHook(postgres_conn_id)
+    engine = postgres_hook.get_sqlalchemy_engine()
+    df.to_sql(pg_table, engine, schema=pg_schema, if_exists='append', index=False)
+```
+
+Следующим шагом исправим запрос на заполнение **mart.f_sales** с учетом добавления статуса.
+Дополнительно необходимо учесть, что payment_amount должен быть отрицательным для заказов со статусом refunded.
+
+```sql
+insert into mart.f_sales (date_id, item_id, customer_id, city_id, quantity, payment_amount, status)
+select 
+dc.date_id
+,item_id
+,customer_id
+,city_id
+,quantity
+,CASE WHEN status = 'refunded' then payment_amount * -1 ELSE payment_amount END as payment_amount
+,status 
+from staging.user_order_log uol
+left join mart.d_calendar as dc on uol.date_time::Date = dc.date_actual
+where uol.date_time::Date = '{{ds}}';
+```
