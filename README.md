@@ -360,15 +360,89 @@ where uol.date_time::Date = '{{ds}}';
 
 Схема **mart.f_customer_retention:**
 
-1. new_customers_count — кол-во новых клиентов (тех, которые сделали только один 
+1. **new_customers_count** — кол-во новых клиентов (тех, которые сделали только один 
 заказ за рассматриваемый промежуток времени).
-2. returning_customers_count — кол-во вернувшихся клиентов (тех,
+2. **returning_customers_count** — кол-во вернувшихся клиентов (тех,
 которые сделали только несколько заказов за рассматриваемый промежуток времени).
-3. refunded_customer_count — кол-во клиентов, оформивших возврат за 
+3. **refunded_customer_count** — кол-во клиентов, оформивших возврат за 
 рассматриваемый промежуток времени.
-4. period_name — weekly.
-5. period_id — идентификатор периода (номер недели или номер месяца).
-6. item_id — идентификатор категории товара.
-7. new_customers_revenue — доход с новых клиентов.
-8. returning_customers_revenue — доход с вернувшихся клиентов.
-9. customers_refunded — количество возвратов клиентов. 
+4. **period_name** — weekly.
+5. **period_id** — идентификатор периода (номер недели или номер месяца).
+6. **item_id** — идентификатор категории товара.
+7. **new_customers_revenue** — доход с новых клиентов.
+8. **returning_customers_revenue** — доход с вернувшихся клиентов.
+9. **customers_refunded** — количество возвратов клиентов. 
+
+Для начала напишем DDL для новой витрины:
+
+```sql
+create table if not exists mart.f_customer_retention (
+new_customers_count INT,
+returning_customers_count INT,
+refunded_customer_count INT,
+period_name VARCHAR(10),
+period_id VARCHAR(20),
+item_id INT,
+new_customers_revenue INT,
+returning_customers_revenue INT,
+customers_refunded INT,
+foreign key (item_id) references mart.d_item (item_id) on update cascade 
+);
+```
+
+Далее напишем скрипт для заполнения витрины:
+
+```sql 
+truncate table mart.f_customer_retention;
+
+insert into mart.f_customer_retention
+(new_customers_count, returning_customers_count, refunded_customer_count, period_name, period_id, item_id, new_customers_revenue,returning_customers_revenue,customers_refunded)
+
+with orders_counter as (
+select 
+fs2.customer_id
+,dc.week_of_year_iso as period_id
+,count(fs2.id) as orders_cnt
+,MAX(case when status = 'refunded' then customer_id END) as ref_cnt
+
+from mart.f_sales fs2
+left join mart.d_calendar dc 
+	on fs2.date_id = dc.date_id 
+group by 1,2
+)
+
+
+SELECT
+count(distinct(case when orders_cnt = 1 then oc.customer_id END)) as  new_customers_count
+,count(distinct(case when orders_cnt > 1 then oc.customer_id END)) as returning_customers_count
+,count(distinct(ref_cnt)) as refunded_customer_count
+,'weekly' as period_name
+,oc.period_id
+,fs2.item_id 
+,sum(case when orders_cnt = 1 then fs2.payment_amount END) as new_customers_revenue
+,SUM(case when orders_cnt > 1 then fs2.payment_amount end) as returning_customers_revenue
+,count(case when fs2.status = 'refunded' then fs2.id END) as customers_refunded
+
+from mart.f_sales fs2 
+left join mart.d_calendar dc 
+	on fs2.date_id = dc.date_id 
+left join orders_counter oc 
+	on fs2.customer_id = oc.customer_id 
+	and dc.week_of_year_iso = oc.period_id
+group by 5,6;
+```
+
+В конце добавим новый **PostgresOperator** в существующий DAG:
+
+```python
+update_f_retention_table = PostgresOperator(
+        task_id='update_f_retention',
+        postgres_conn_id=postgres_conn_id,
+        sql="sql/mart.f_customer_retention.sql")
+```
+
+## Итог 
+В ходе данного проекта был переработан существующий пайплайн данных с учетом новый потребностей бизнеса, а именно:
+
+- добавлено поле, учитывающее статус заказа
+- добавлена новая витрина, позволяющая анализировать "возвращаемость клиентов" в разрезе недель и отвечать на вопрос "какой товар лучше удерживает клиентов"
