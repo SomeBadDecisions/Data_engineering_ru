@@ -2,6 +2,7 @@ import time
 import requests
 import json
 import pandas as pd
+import logging
 
 from datetime import datetime, timedelta
 from airflow import DAG
@@ -30,17 +31,17 @@ headers = {
 
 
 def generate_report(ti):
-    print('Making request generate_report')
+    logging.info('Making request generate_report')
 
     response = requests.post(f'{base_url}/generate_report', headers=headers)
     response.raise_for_status()
     task_id = json.loads(response.content)['task_id']
     ti.xcom_push(key='task_id', value=task_id)
-    print(f'Response is {response.content}')
+    logging.info(f'Response is {response.content}')
 
 
 def get_report(ti):
-    print('Making request get_report')
+    logging.info('Making request get_report')
     task_id = ti.xcom_pull(key='task_id')
 
     report_id = None
@@ -48,7 +49,7 @@ def get_report(ti):
     for i in range(20):
         response = requests.get(f'{base_url}/get_report?task_id={task_id}', headers=headers)
         response.raise_for_status()
-        print(f'Response is {response.content}')
+        logging.info(f'Response is {response.content}')
         status = json.loads(response.content)['status']
         if status == 'SUCCESS':
             report_id = json.loads(response.content)['data']['report_id']
@@ -58,23 +59,24 @@ def get_report(ti):
 
     if not report_id:
         raise TimeoutError()
+        logging.error('Reort was not uploaded due to timeout')
 
     ti.xcom_push(key='report_id', value=report_id)
-    print(f'Report_id={report_id}')
+    logging.info(f'Report_id={report_id}')
 
 
 def get_increment(date, ti):
-    print('Making request get_increment')
+    logging.info('Making request get_increment')
     report_id = ti.xcom_pull(key='report_id')
     response = requests.get(
         f'{base_url}/get_increment?report_id={report_id}&date={str(date)}T00:00:00',
         headers=headers)
     response.raise_for_status()
-    print(f'Response is {response.content}')
+    logging.info(f'Response is {response.content}')
 
     increment_id = json.loads(response.content)['data']['increment_id']
     ti.xcom_push(key='increment_id', value=increment_id)
-    print(f'increment_id={increment_id}')
+    logging.info(f'increment_id={increment_id}')
 
 
 def upload_data_to_staging(filename, date, pg_table, pg_schema, ti):
@@ -104,6 +106,7 @@ args = {
 }
 
 business_dt = '{{ ds }}'
+logging.info(f'{ds}')
 
 with DAG(
         'customer_retention',
