@@ -43,7 +43,7 @@ r < 4 — 5% от заказа, но не менее 100 руб.;
 **API-KEY**: 25c27781-8fde-4b30-a22e-524044a7580f
 Для обращения к API необходима утилита curl.
 
-## 1.3.1 GET /restaurants
+### 1.3.1 GET /restaurants
 Метод /restaurants возвращает список доступных ресторанов (_id, name).
 
 ```console
@@ -67,7 +67,7 @@ desc — сортировка по убыванию.
 - offset — необязательный параметр. Значение по умолчанию: 0.
 Параметр определяет количество возвращаемых элементов результирующей выборки, когда формируется ответ.
 
-## 1.3.2 GET /couriers
+### 1.3.2 GET /couriers
 Метод /couriers используется для того, чтобы получить список курьеров (_id, name).
 
 ```console
@@ -80,7 +80,7 @@ curl --location --request GET 'https://d5d04q7d963eapoepsqr.apigw.yandexcloud.ne
 
 Параметры /couriers аналогичны параметрам в предыдущем методе: sort_field, sort_direction, limit, offset.
 
-## 1.3.3 GET / deliveries
+### 1.3.3 GET / deliveries
 Метод /deliveries используется для того, чтобы получить список совершённых доставок.
 
 ```console
