@@ -168,7 +168,7 @@ tip_sum numeric(14,2)
 
 В качестве модели данных выбрана "снежинка".
 
-***dds.dim_couriers***
+**dds.dim_couriers**
 
 ```SQL 
 create table dds.dim_couriers(
@@ -178,7 +178,7 @@ name varchar
 );
 ```
 
-***dds.fct_courier_tips***
+**dds.fct_courier_tips**
 
 ```SQL
 create table  dds.fct_courier_tips(
@@ -188,7 +188,7 @@ courier_tips_sum numeric(14,2)
 );
 ```
 
-***dds.fct_order_rates***
+**dds.fct_order_rates**
 
 ```SQL
 create table  dds.fct_order_rates(
