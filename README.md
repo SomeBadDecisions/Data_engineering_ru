@@ -8,7 +8,7 @@
 - dds
 - cdm 
 
-Итоговые DAG'и находятся в /src/dwh_architecture/examples 
+Итоговые DAG'и находятся в /src/dags/existing_dags/examples 
 
 В рамках данного проекта необходимо доработать существующих DWH, добавив новые источники данных и витрину, содерждащие информацию для расчетов с курьерами.
 Заказчику необходимо рассчитать суммы оплаты каждому курьеру за предыдущий месяц. Например, в июне выплачивают сумму за май. Расчётным числом является 10-е число каждого месяца.
@@ -119,5 +119,97 @@ curl --location --request GET 'https://d5d04q7d963eapoepsqr.apigw.yandexcloud.ne
 
 ### 2.1 CDM 
 
-Something-something
+```SQL
+create table cdm.dm_courier_ledger (
+id serial primary key,
+courier_id varchar,
+courier_name varchar,
+settlement_year integer,
+settlement_month integer,
+orders_count integer,
+orders_total_sum numeric(14,2),
+rate_avg numeric(14,2),
+order_processing_fee float,
+courier_order_sum float,
+courier_tips_sum numeric(14,2),
+courier_reward_sum float);
+```
+
+### 2.2 STG
+
+STG слой будет хранить данные AS IS.
+
+**stg.deliverysystem_couriers**
+
+```SQL
+create table stg.deliverysystem_couriers (
+id text not NULL,
+name varchar
+);
+```
+
+**stg.deliverysystem_deliveries**
+
+```SQL
+create table stg.deliverysystem_deliveries (
+order_id text not null,
+order_ts timestamp,
+delivery_id text not null,
+courier_id text not null,
+address varchar,
+delivery_ts timestamp,
+rate numeric(14,2),
+sum float,
+tip_sum numeric(14,2)
+);
+```
+
+### 2.3 DDS
+
+В качестве модели данных выбрана "снежинка".
+
+***dds.dim_couriers***
+
+```SQL 
+create table dds.dim_couriers(
+id serial primary key,
+courier_id text,
+name varchar
+);
+```
+
+***dds.fct_courier_tips***
+
+```SQL
+create table  dds.fct_courier_tips(
+id serial primary key,
+courier_id text,
+courier_tips_sum numeric(14,2)
+);
+```
+
+***dds.fct_order_rates***
+
+```SQL
+create table  dds.fct_order_rates(
+id serial primary key,
+order_id text,
+order_ts timestamp,
+delivery_id text,
+address varchar,
+delivery_ts timestamp,
+courier_id varchar,
+rate float,
+sum numeric(14,2)
+);
+```
+
+## 3 Реализация DAG
+
+Далее необходимо реализовать новые DAG'и для корректного извлечения и обработки данных.
+
+### 3.1 STG
+
+Начнем с заливки данных в слой стейджинга.
+
 
