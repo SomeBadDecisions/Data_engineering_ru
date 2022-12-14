@@ -196,11 +196,12 @@ id serial primary key,
 order_id text,
 order_ts timestamp,
 delivery_id text,
+courier_id varchar,
 address varchar,
 delivery_ts timestamp,
-courier_id varchar,
 rate float,
-sum numeric(14,2)
+sum numeric(14,2),
+tip_sum numeric(14,2)
 );
 ```
 
@@ -212,7 +213,7 @@ sum numeric(14,2)
 
 Начнем с заливки данных в слой стейджинга.
 
-Здесь у нас 2 таблицы, забираем данные по API и заливаем в таблицы as is.
+Здесь у нас 2 таблицы **deliverysystem_couriers** и **deliverysystem_deliveries**, забираем данные по API и заливаем в таблицы as is.
 Дополнительно позаботимся об идемпотентности (добавим очистку таблиц перед заливкой, чтобы при последующих запусках дага данные не дублировались).
 
 Итоговый даг находится в /src/dags/new_dags и выглядит следующим образом:
@@ -343,6 +344,62 @@ with DAG ('dwh_update',
 
 upload_couriers >> upload_deliveries
 ```
+
+### 3.2 DDS 
+
+Далее прольем данные в DDS. Заполнить нужно 3 таблицы: **dim_couriers**, **fct_courier_tips** и **fct_order_rates**.
+
+Напишем SQL-скрипт и добавим в написанный ранее DAG PostgresOperator для каждой целевой таблицы.
+
+```SQL
+TRUNCATE TABLE dds.dim_couriers RESTART IDENTITY;
+
+INSERT INTO dds.dim_couriers (courier_id,name)
+SELECT 
+id AS courier_id
+,name
+
+FROM  stg.deliverysystem_couriers
+;
+```
+
+```SQL
+TRUNCATE TABLE dds.fct_order_rates RESTART IDENTITY;
+
+INSERT INTO dds.fct_order_rates (order_id,order_ts,delivery_id,address,delivery_ts,courier_id,rate,sum, tip_sum)
+SELECT 
+order_id 
+,order_ts
+,delivery_id
+,address
+,delivery_ts
+,rate
+,sum
+,tip_sum
+
+FROM stg.deliverysystem_deliveries
+;
+```
+
+```python
+upload_dim_couriers = PostgresOperator(
+        task_id='dim_couriers',
+        postgres_conn_id=postgres_conn,
+        sql="sql/dim_couriers.sql")
+```
+
+```python
+upload_fct_order_rates = PostgresOperator(
+        task_id='fct_order_rates',
+        postgres_conn_id=postgres_conn,
+        sql="sql/fct_order_rates.sql")
+```
+
+### 3.3 CDM 
+
+Теперь заполним итоговую витрину **cdm.dm_settlement_report**.
+
+```SQL
 
 
 
