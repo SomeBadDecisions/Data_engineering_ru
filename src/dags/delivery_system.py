@@ -120,5 +120,19 @@ with DAG ('dwh_update',
                     'pg_table' : 'deliverysystem_deliveries'
                 })
 
+    upload_dim_couriers = PostgresOperator(
+        task_id='dim_couriers',
+        postgres_conn_id=postgres_conn,
+        sql="sql/dim_couriers.sql")
 
-upload_couriers >> upload_deliveries
+    upload_fct_order_rates = PostgresOperator(
+        task_id='fct_order_rates',
+        postgres_conn_id=postgres_conn,
+        sql="sql/fct_order_rates.sql")
+
+    upload_ledger = PostgresOperator(
+        task_id='ledger',
+        postgres_conn_id=postgres_conn,
+        sql="sql/ledger.sql")
+
+upload_couriers >> upload_deliveries >> upload_dim_couriers >> upload_fct_order_rates >> upload_ledger

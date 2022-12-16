@@ -1,7 +1,7 @@
 # Построение DWH
 
 ## 1.1 Описание
-Ранее мною был спроектирован DWH для ресторана, который решил добавить возможность доставки и еды. Новые данные необходимо было корректно собирать и обрабатывать. В качестве источников данных использовались **PostgreSql** и **MongoDB**.
+Ранее мною был спроектирован DWH для ресторана, который решил добавить возможность доставки еды. Новые данные необходимо было корректно собирать и обрабатывать. В качестве источников данных использовались **PostgreSql** и **MongoDB**.
 Созданный DWH имеет 3 слоя: 
 
 - staging
@@ -46,6 +46,8 @@ r < 4 — 5% от заказа, но не менее 100 руб.;
 ## 1.3 Спецификация API 
 **API-KEY**: 25c27781-8fde-4b30-a22e-524044a7580f
 Для обращения к API необходима утилита curl.
+
+Важно учесть, что данных много, API отдают их порционно, поэтому для корректного считывания данных нужно будет воспользоваться полями offset, limit, from и to.
 
 ### 1.3.1 GET /restaurants
 Метод /restaurants возвращает список доступных ресторанов (_id, name).
@@ -175,16 +177,6 @@ create table dds.dim_couriers(
 id serial primary key,
 courier_id text,
 name varchar
-);
-```
-
-**dds.fct_courier_tips**
-
-```SQL
-create table  dds.fct_courier_tips(
-id serial primary key,
-courier_id text,
-courier_tips_sum numeric(14,2)
 );
 ```
 
@@ -347,7 +339,7 @@ upload_couriers >> upload_deliveries
 
 ### 3.2 DDS 
 
-Далее прольем данные в DDS. Заполнить нужно 3 таблицы: **dim_couriers**, **fct_courier_tips** и **fct_order_rates**.
+Далее прольем данные в DDS. Заполнить нужно 2 таблицы: **dim_couriers** и **fct_order_rates**.
 
 Напишем SQL-скрипт и добавим в написанный ранее DAG PostgresOperator для каждой целевой таблицы.
 
@@ -397,10 +389,101 @@ upload_fct_order_rates = PostgresOperator(
 
 ### 3.3 CDM 
 
-Теперь заполним итоговую витрину **cdm.dm_settlement_report**.
+Теперь заполним итоговую витрину **cdm.dm_courier_ledger**.
 
 ```SQL
+TRUNCATE TABLE cdm.dm_courier_ledger RESTART IDENTITY;
+
+INSERT INTO cdm.dm_courier_ledger (courier_id, courier_name, settlement_year, settlement_month, orders_count, orders_total_sum, rate_avg, 
+								   order_processing_fee, courier_order_sum, courier_tips_sum, courier_reward_sum)
+with pre as (
+SELECT 
+ort.courier_id
+,c.name as courier_name 
+,EXTRACT('year' from ort.delivery_ts) as settlement_year
+,EXTRACT('month' from ort.delivery_ts) as settlement_month 
+,COUNT(ort.order_id) as orders_count
+,SUM(ort.sum) as orders_total_sum
+,AVG(ort.rate) as rate_avg
+,SUM(ort.sum) * 0.25 as order_processing_fee   
+,SUM(ort.tip_sum) as courier_tips_sum
+
+FROM dds.fct_order_rates ort
+LEFT JOIN dds.dim_couriers c 
+	ON ort.courier_id = c.courier_id
+group by 1,2,3,4
+),
 
 
+pre_reward as (
+select
+ort.courier_id
+,ort.sum 
+,pre.rate_avg 
+,EXTRACT('year' from ort.delivery_ts) as settlement_year
+,EXTRACT('month' from ort.delivery_ts) as settlement_month 
+,case when pre.rate_avg < 4 then 
+			case when ort.sum * 0.05 >= 100 then ort.sum * 0.05 else 100 END
+	  when pre.rate_avg >= 4 and pre.rate_avg < 4.5 then 
+	  		case when ort.sum * 0.07 >= 150 then ort.sum * 0.07 else 150 end  
+	  when pre.rate_avg >= 4.5 and pre.rate_avg < 4.9 then 
+	  		case when ort.sum * 0.08 >= 175 then ort.sum * 0.08 else 175 END
+	  when pre.rate_avg >= 4.9 then 
+	  		case when ort.sum * 0.08 >= 200 then ort.sum * 0.08 else 200 end  
+	  end as courier_order 
+from dds.fct_order_rates ort
+left join pre 
+	on ort.courier_id = pre.courier_id
+	and EXTRACT('year' from ort.delivery_ts) = pre.settlement_year
+	and EXTRACT('month' from ort.delivery_ts) = pre.settlement_month
+),
+
+reward as (
+select 
+courier_id
+,settlement_year
+,settlement_month
+,SUM(courier_order) as courier_order_sum
+
+from pre_reward
+group by 1,2,3
+)
+
+select 
+t1.courier_id
+,t1.courier_name
+,t1.settlement_year
+,t1.settlement_month
+,t1.orders_count
+,t1.orders_total_sum
+,t1.rate_avg
+,t1.order_processing_fee
+,t2.courier_order_sum
+,t1.courier_tips_sum
+,t2.courier_order_sum + courier_tips_sum * 0.95 as courier_reward_sum
+
+from pre t1
+left join reward t2 
+	on t1.courier_id = t2.courier_id
+	and t1.settlement_year = t2.settlement_year
+	and t1.settlement_month = t2.settlement_month
+order by courier_id;
+```
+
+И добавим еще один PostgresOperator:
+
+```python 
+upload_ledger = PostgresOperator(
+        task_id='ledger',
+        postgres_conn_id=postgres_conn,
+        sql="sql/ledger.sql")
+```
+
+## Итоги 
+
+В рамках проекта был организован ETL-процесс, забирающий данные по API и через stg и dds заливающий их в витрину для рассчетов с курьерами **cdm.dm_courier_ledger**.
+Все итоговые sql скрипты находятся в папке /src/sql
+Итоговый даг находится в /src/dags/delivery_system.py
+ 
 
 
