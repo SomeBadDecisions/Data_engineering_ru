@@ -482,7 +482,9 @@ upload_ledger = PostgresOperator(
 ## Итоги 
 
 В рамках проекта был организован ETL-процесс, забирающий данные по API и через stg и dds заливающий их в витрину для рассчетов с курьерами **cdm.dm_courier_ledger**.
+
 Все итоговые sql скрипты находятся в папке /src/sql
+
 Итоговый даг находится в /src/dags/delivery_system.py
  
 
