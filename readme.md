@@ -6,3 +6,4 @@
 - **Postgres**
 - **Airflow**
 - **MongoDb**
+- **Vertica**
