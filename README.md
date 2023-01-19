@@ -26,7 +26,7 @@
 
 ### 1.2  Цель
 
-В качестве источника данных вновь будет использоваться csv-файл, находящийся в хранилище S3.
+В качестве источника данных будет использоваться csv-файл, находящийся в хранилище S3.
 
 В рамках проекта необходимо:
 
@@ -40,3 +40,58 @@
 
 ![target_dds](https://user-images.githubusercontent.com/63814959/213495667-1712d751-77af-4b9a-840b-1c7f0e346649.png)
 
+## 2.1 Выгрузка из источника 
+
+Первым шагом напишем DAG, который будет забирать csv-файл из S3.
+
+```python
+from airflow import DAG
+from airflow.operators.bash import BashOperator
+from airflow.operators.python import PythonOperator
+from airflow.decorators import dag
+import pendulum
+import boto3
+
+
+default_args = {
+    'owner': 'Airflow',
+    'retries': 0
+}
+
+AWS_ACCESS_KEY_ID = "YCAJEWXOyY8Bmyk2eJL-hlt2K"
+AWS_SECRET_ACCESS_KEY = "YCPs52ajb2jNXxOUsL4-pFDL1HnV2BCPd928_ZoA"
+
+session = boto3.session.Session()
+s3_client = session.client(
+    service_name='s3',
+    endpoint_url='https://storage.yandexcloud.net',
+    aws_access_key_id=AWS_ACCESS_KEY_ID,
+    aws_secret_access_key=AWS_SECRET_ACCESS_KEY,
+)
+
+
+
+def fetch_s3_file(bucket: str, key: str):
+    s3_client.download_file(
+        bucket,
+        key,
+        f'/data/{key}'
+    )
+
+
+with DAG(
+    dag_id="group_log",
+    default_args=default_args,
+    start_date=pendulum.datetime(2022, 12, 25, tz="UTC"),
+    schedule_interval=None,
+    catchup=False
+) as dag:
+    
+    download = PythonOperator(
+        task_id='fetch_csv',
+        python_callable=fetch_s3_file,
+        op_kwargs={'bucket': 'sprint6', 'key': 'group_log.csv'}
+    )
+
+    download 
+```
