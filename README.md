@@ -263,3 +263,89 @@ SEGMENTED BY hk_l_user_group_activity all nodes
 PARTITION BY load_dt::date
 GROUP BY calendar_hierarchy_day(load_dt::date, 3, 2);
 ```
+
+```python 
+def stg_to_st(
+    schema: str,
+    table: str,
+    columns: List[str]
+):
+    conn_info = {'host': '51.250.75.20',
+             'port': 5433,
+             'user': 'rubtsov_ka_gmail_com',
+             'password': 'etsi1htIOczd'
+             }
+
+    with vertica_python.connect(**conn_info) as conn:
+        cur = conn.cursor()
+        cur.execute(f"TRUNCATE TABLE {schema}.{table}")
+        cur.execute(f"""
+        INSERT INTO {schema}.{table}({columns})
+
+        select 
+        luga.hk_l_user_group_activity,
+        gl.user_id_from ,
+        gl.event,
+        gl.datetime as event_dt,
+        now() as load_dt,
+        'S3' as load_src
+
+        from RUBTSOV_KA_GMAIL_COM__STAGING.group_log as gl
+        left join RUBTSOV_KA_GMAIL_COM__DWH.h_groups as hg 
+            on gl.group_id = hg.group_id
+        left join RUBTSOV_KA_GMAIL_COM__DWH.h_users as hu 
+            on gl.user_id = hu.user_id
+        left join RUBTSOV_KA_GMAIL_COM__DWH.l_user_group_activity as luga 
+            on hg.hk_group_id = luga.hk_group_id 
+            and hu.hk_user_id = luga.hk_user_id
+            ;
+                   """)
+                   
+        conn.commit()
+    conn.close()
+```
+
+```python 
+  stg_to_s = PythonOperator(
+        task_id='stg_to_s',
+        python_callable=stg_to_st,
+        op_kwargs={'schema':'RUBTSOV_KA_GMAIL_COM__DWH',
+                   'table':'s_auth_history',
+                   'columns':'hk_l_user_group_activity,user_id_from,event,event_dt,load_dt,load_src'}
+    )
+```
+
+## 3.1 Ответ бизнесу [В разработке]
+
+with user_group_messages as (
+    SELECT hk_group_id, 
+    count(distinct(hk_user_id)) as cnt_users_in_group_with_messages
+    FROM RUBTSOV_KA_GMAIL_COM__DWH.l_user_group_activity
+    WHERE hk_group_id IN (SELECT hk_group_id FROM RUBTSOV_KA_GMAIL_COM__DWH.l_groups_dialogs lgd)
+    group by hk_group_id 
+),
+
+user_group_log as (
+    select hk_group_id,
+    count(distinct(hk_user_id)) as cnt_added_users
+    
+    FROM RUBTSOV_KA_GMAIL_COM__DWH.l_user_group_activity luga
+    LEFT JOIN RUBTSOV_KA_GMAIL_COM__DWH.s_auth_history suh 
+    	ON luga.hk_l_user_group_activity = suh.hk_l_user_group_activity 
+    WHERE suh.event = 'add'
+    AND luga.hk_group_id in (SELECT hk_group_id 
+    						 FROM RUBTSOV_KA_GMAIL_COM__DWH.h_groups hg
+    						 ORDER BY registration_dt
+    						 LIMIT 10)
+    GROUP BY hk_group_id 
+)
+
+
+select  ugl.hk_group_id,
+ugl.cnt_added_users,
+ugm.cnt_users_in_group_with_messages,
+ugm.cnt_users_in_group_with_messages / ugl.cnt_added_users as group_conversion
+from user_group_log as ugl
+left join user_group_messages as ugm on ugl.hk_group_id = ugm.hk_group_id
+order by ugm.cnt_users_in_group_with_messages / ugl.cnt_added_users desc
+;
