@@ -116,7 +116,7 @@ PARTITION BY datetime::date
 GROUP BY calendar_hierarchy_day(datetime::date,3,2);
 ```
 
-### 2.3 Загрузка в stg 
+### 2.3 Загрузка в STG
 
 Дополним созданный ранее DAG задачей на заливку данных из скачанного csv в созданную таблицу **group_log**.
 
@@ -156,4 +156,110 @@ to_stg = PythonOperator(
         'table':'group_log',
         'columns':'group_id,user_id,user_id_from,event,datetime'}
     )
+```
+
+### 2.4 Создание и наполнение link-таблицы в DWH
+
+Создадим таблицу **l_user_group_activity** в схеме DWH.
+
+Таблица должна содержать следующие поля:
+
+- hk_l_user_group_activity — основной ключ типа INT
+- hk_user_id — внешний ключ типа INT, который связан с основным ключом хаба DWH.h_users
+- hk_group_id — внешний ключ типа INT, который связан с основным ключом хаба DWH.h_groups
+- load_dt — временная отметка типа DATETIME о том, когда были загружены данные
+- load_src — данные об источнике типа VARCHAR(20)
+
+```sql
+DROP TABLE IF EXISTS RUBTSOV_KA_GMAIL_COM__DWH.l_user_group_activity;
+
+CREATE TABLE RUBTSOV_KA_GMAIL_COM__DWH.l_user_group_activity (
+hk_l_user_group_activity INT PRIMARY KEY,
+hk_user_id INT NOT NULL CONSTRAINT fk_l_group_user REFERENCES RUBTSOV_KA_GMAIL_COM__DWH.h_users (hk_user_id),
+hk_group_id INT NOT NULL CONSTRAINT fk_l_user_group REFERENCES RUBTSOV_KA_GMAIL_COM__DWH.h_groups (hk_group_id),
+load_dt DATETIME,
+load_src VARCHAR(20)
+)
+order by load_dt
+SEGMENTED BY hk_l_user_group_activity all nodes
+PARTITION BY load_dt::date
+GROUP BY calendar_hierarchy_day(load_dt::date, 3, 2);
+```
+
+
+Для наполнения таблицы, как и раньше, дополним DAG:
+
+```python 
+def stg_to_link(
+    schema: str,
+    table: str,
+    columns: List[str]
+):
+    conn_info = {'host': '51.250.75.20',
+             'port': 5433,
+             'user': 'rubtsov_ka_gmail_com',
+             'password': 'etsi1htIOczd'
+             }
+
+    with vertica_python.connect(**conn_info) as conn:
+        cur = conn.cursor()
+        cur.execute(f"TRUNCATE TABLE {schema}.{table}")
+        cur.execute(f"""
+        INSERT INTO {schema}.{table}({columns})
+
+        select distinct
+        hash(hu.user_id,hg.group_id) as hk_l_user_group_activity
+        ,hk_user_id
+        ,hk_group_id
+        ,now() as load_dt
+        ,'S3' as load_src
+
+        from RUBTSOV_KA_GMAIL_COM__STAGING.group_log as gl
+        left join RUBTSOV_KA_GMAIL_COM__DWH.h_users hu
+            on gl.user_id = hu.user_id 
+        left join RUBTSOV_KA_GMAIL_COM__DWH.h_groups hg 
+            on gl.group_id = hg.group_id 
+        ;
+                   """)
+                   
+        conn.commit()
+    conn.close()
+```
+
+```python
+stg_to_l = PythonOperator(
+        task_id='stg_to_l',
+        python_callable=stg_to_link,
+        op_kwargs={'schema':'RUBTSOV_KA_GMAIL_COM__DWH',
+                   'table':'l_user_group_activity',
+                   'columns':'hk_l_user_group_activity,hk_user_id,hk_group_id,load_dt,load_src'}
+    )
+```
+
+### 2.5 Создание и наполнение сателлит-таблицы в DWH
+
+Таблица **s_auth_history** должна содержать поля:
+
+- hk_l_user_group_activity —  внешний ключ к ранее созданной таблице связей типа INT
+- user_id_from — идентификатор типа INT того пользователя, который добавил в группу другого. Если новый участник вступил в сообщество сам, это поле пустое 
+- event — событие пользователя в группе
+- event_dt — дата и время, когда совершилось событие
+- load_dt - дата загрузки
+- load_src - источник 
+
+```sql
+DROP TABLE IF EXISTS RUBTSOV_KA_GMAIL_COM__DWH.s_auth_history;
+
+CREATE TABLE RUBTSOV_KA_GMAIL_COM__DWH.s_auth_history (
+hk_l_user_group_activity INT NOT NULL CONSTRAINT fk_activity_auth REFERENCES RUBTSOV_KA_GMAIL_COM__DWH.l_user_group_activity (hk_l_user_group_activity),
+user_id_from INT,
+event VARCHAR(40),
+event_dt DATETIME,
+load_dt DATETIME,
+load_src VARCHAR(20)
+)
+order by load_dt
+SEGMENTED BY hk_l_user_group_activity all nodes
+PARTITION BY load_dt::date
+GROUP BY calendar_hierarchy_day(load_dt::date, 3, 2);
 ```
