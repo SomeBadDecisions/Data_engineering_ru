@@ -95,3 +95,65 @@ with DAG(
 
     download 
 ```
+
+### 2.2 DDL stg  
+
+Далее нам нужно написать DDL для таблицы **group_log** на stg.
+На слое stg данные храним AS IS.
+
+```sql
+DROP TABLE IF EXISTS RUBTSOV_KA_GMAIL_COM__STAGING.group_log;
+
+CREATE TABLE RUBTSOV_KA_GMAIL_COM__STAGING.group_log (
+group_id INT PRIMARY KEY,
+user_id INT,
+user_id_from INT,
+event varchar(40),
+datetime datetime
+)
+segmented by hash(group_id) all nodes
+PARTITION BY datetime::date
+GROUP BY calendar_hierarchy_day(datetime::date,3,2);
+```
+
+### 2.3 Загрузка в stg 
+
+Дополним созданный ранее DAG задачей на заливку данных из скачанного csv в созданную таблицу **group_log**.
+
+```python 
+def load_dataset_to_vertica(
+    dataset_path: str,
+    schema: str,
+    table: str,
+    columns: List[str]
+):
+    conn_info = {'host': '51.250.75.20',
+             'port': 5433,
+             'user': 'rubtsov_ka_gmail_com',
+             'password': 'etsi1htIOczd'
+             }
+
+    with vertica_python.connect(**conn_info) as conn:
+        cur = conn.cursor()
+        cur.execute(f"TRUNCATE TABLE {schema}.{table}")
+        cur.execute(f"""COPY {schema}.{table} ({columns})
+                   FROM LOCAL '{dataset_path}'
+                   DELIMITER ','
+                   """)
+                   
+        conn.commit()
+    conn.close()
+```
+
+После добавим новую задачу:
+
+```python
+to_stg = PythonOperator(
+        task_id='csv_to_stg',
+        python_callable=load_dataset_to_vertica,
+        op_kwargs={'dataset_path': '/data/group_log.csv',
+        'schema': 'RUBTSOV_KA_GMAIL_COM__STAGING',
+        'table':'group_log',
+        'columns':'group_id,user_id,user_id_from,event,datetime'}
+    )
+```
