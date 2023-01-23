@@ -14,6 +14,7 @@
 
 Чтобы привлечь новых пользователей, маркетологи хотят разместить на сторонних сайтах рекламу сообществ с высокой активностью. 
 Нужно определить группы, в которых начала общаться большая часть их участников. Другими словами, нам нужно выявить группы с самой высокой конверсией.
+Конкретно сейчас бизнес интересует конверсия по 10 самым старым группам.
 
 Пример:
 
@@ -315,16 +316,22 @@ def stg_to_st(
     )
 ```
 
-## 3.1 Ответ бизнесу [В разработке]
+## 3 Ответ бизнесу 
 
+В завершении напишем запрос, который позволит посмотреть конверсию по 10 самым старым группам.
+
+```sql 
+--Считаем количество уникальных пользователей, которые написали хотя бы одно сообщение
 with user_group_messages as (
     SELECT hk_group_id, 
     count(distinct(hk_user_id)) as cnt_users_in_group_with_messages
-    FROM RUBTSOV_KA_GMAIL_COM__DWH.l_user_group_activity
-    WHERE hk_group_id IN (SELECT hk_group_id FROM RUBTSOV_KA_GMAIL_COM__DWH.l_groups_dialogs lgd)
-    group by hk_group_id 
-),
+    FROM RUBTSOV_KA_GMAIL_COM__DWH.l_groups_dialogs lgd
+    LEFT JOIN RUBTSOV_KA_GMAIL_COM__DWH.l_user_message lum 
+    	ON lgd.hk_message_id = lum.hk_message_id 
+    GROUP BY hk_group_id 
+ ),
 
+--Считаем общее количество пользователей, вступивших в группы 
 user_group_log as (
     select hk_group_id,
     count(distinct(hk_user_id)) as cnt_added_users
@@ -340,7 +347,7 @@ user_group_log as (
     GROUP BY hk_group_id 
 )
 
-
+--Считаем конверсию 
 select  ugl.hk_group_id,
 ugl.cnt_added_users,
 ugm.cnt_users_in_group_with_messages,
@@ -349,3 +356,20 @@ from user_group_log as ugl
 left join user_group_messages as ugm on ugl.hk_group_id = ugm.hk_group_id
 order by ugm.cnt_users_in_group_with_messages / ugl.cnt_added_users desc
 ;
+```
+
+Результат:
+
+![conversion](https://user-images.githubusercontent.com/63814959/214176767-6e623ed8-da9a-4d87-9a71-842ffcb3e6de.png)
+
+## 4 Итоги
+
+В рамках данного проекта было разработано хранилище по модели **Data Vault**, содержащее 2 слоя: **staging** и **DWH**. С помощью данного хранилища были посчитаны конверсии для 10 самых старых групп в социальной сети.
+
+В качетсве источника данных использовалось хранилище **Amazon S3**.
+
+Итоговый даг: **/src/dags/final_dag.py**
+
+SQL-скрипты: **/src/sql**
+
+Пример источника: **/src/group_log.csv**
