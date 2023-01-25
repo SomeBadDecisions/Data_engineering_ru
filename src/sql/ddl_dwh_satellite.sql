@@ -8,7 +8,7 @@ event_dt DATETIME,
 load_dt DATETIME,
 load_src VARCHAR(20)
 )
-order by load_dt
+order by event 
 SEGMENTED BY hk_l_user_group_activity all nodes
 PARTITION BY load_dt::date
 GROUP BY calendar_hierarchy_day(load_dt::date, 3, 2);
