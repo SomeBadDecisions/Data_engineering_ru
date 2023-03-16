@@ -97,3 +97,12 @@ events.write.partitionBy("event_type","date")\
 - **λ2** — долгота второй точки;
 - **r** — радиус Земли, примерно равный 6371 км.
 
+Загрузим справочник с координатами городов в HDFS и прочиатем его:
+
+```console
+hdfs dfs -copyFromLocal geo.csv /user/konstantin/data/
+```
+
+```python 
+geo = spark.read.csv("/user/konstantin/data/geo.csv", sep=';', header= True)
+```
