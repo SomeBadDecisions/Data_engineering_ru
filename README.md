@@ -72,6 +72,15 @@
 
 ## 2 Построение витрин
 
+Перед построением витрин заполним ODS-слой. Добавим партиционирование исходных данных по event_type:
+
+```python
+events = spark.read.parquet("/user/master/data/geo/events")
+
+events.write.partitionBy("event_type","date")\
+.mode("overwrite").parquet("/user/konstantin/data/events")
+```
+
 ### 2.1 Витрина в разрезе пользователей 
 
 Прежде всего необходимо определить, в каком городе было совершено событие.
