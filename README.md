@@ -221,6 +221,7 @@ def spark_session_init(name):
 ```
 
 Функция для записи:
+
 ```python 
 def write_df(df, df_name, date):
     df.write.mode('overwrite').parquet(f'/user/konstantin/prod/{df_name}/date={date}')
@@ -232,7 +233,7 @@ def write_df(df, df_name, date):
 
 Локальный тестовый **.ipynb**: **/src/dm_users.ipynb** 
 
-### 2.1 Витрина в разрезе зон
+### 2.2 Витрина в разрезе зон
 
 Создадим витрине с распределением различных событий по городам.
 Данная витрина поможет понимать поведение пользователей в зависимости от географической зоны.
@@ -266,3 +267,107 @@ df_zones = events.withColumn('week_message', F.count(F.when(events.event_type ==
 
 Локальный тестовый **.ipynb**: **/src/dm_zone.ipynb** 
 
+### 2.3 Витрина рекомендаций
+
+В финальной витрине необходимо собрать парные атрибуты (два айдишника) пользователей, 
+которые могут быть порекомендованы друг другу.
+
+Для начала прочитаем данные (как и при сборке предыдущих витрин).
+
+После найдем координаты последнего отправленного сообщения по каждому пользователю:
+
+```python 
+window_last_msg = Window.partitionBy('user_id').orderBy(F.col('event.message_ts').desc())
+last_msg = events.where("event_type == 'message'") \
+    .where('msg_lon is not null') \
+    .withColumn("rn",F.row_number().over(window_last)) \
+    .filter(F.col('rn') == 1) \
+    .drop(F.col('rn')) \
+    .selectExpr('user_id', 'msg_lon as lon', 'msg_lat as lat', 'city', 'event.datetime as datetime', 'timezone')
+```
+
+Соберем список пользователей и каналов, на которые они подписаны с помощью self-join:
+
+```python 
+user_channel = events_geo.select(
+    F.col('event.subscription_channel').alias('channel'),
+    F.col('event.user').alias('user_id')
+).distinct()
+
+user_channel_f = user_channel \
+            .join(user_channel.withColumnRenamed('user_id', 'user_id_2'), ['channel'], 'inner') \
+            .filter('user_id < user_id_2')
+```
+
+Сджойним результат с сообщениями, чтобы получить актуальные координаты для каждого в паре пользователей:
+
+```python 
+channel_msg = last_msg \
+              .join(user_channel_f, ['user_id'], 'inner') \
+              .withColumnRenamed("lon", "user_1_lon") \
+              .withColumnRenamed("lat", "user_1_lat") \
+              .withColumnRenamed("city", "city_1") \
+              .withColumnRenamed("datetime", "datetime_1") \
+              .withColumnRenamed("timezone", "timezone_1") \
+              .join(last_msg.withColumnRenamed("user_id", "user_id_2"), ["user_id_2"], "inner") \
+              .withColumnRenamed("lon", "user_2_lon") \
+              .withColumnRenamed("lat", "user_2_lat") \
+              .withColumnRenamed("city", "city_2") \
+              .withColumnRenamed("datetime", "datetime_2") \
+              .withColumnRenamed("timezone", "timezone_2")
+```
+
+По уже знакомой формуле найдем расстояние между пользователями и отфильтруем по <= 1 км:
+
+```python 
+distance = channel_msg \
+    .withColumn('pre_lon', F.radians(F.col('user_1_lon')) - F.radians(F.col('user_2_lon'))) \
+    .withColumn('pre_lat', F.radians(F.col('user_1_lat')) - F. radians(F.col('user_2_lat'))) \
+    .withColumn('dist', F.asin(F.sqrt(
+        F.sin(F.col('pre_lat') / 2) ** 2 + F.cos(F.radians(F.col('user_2_lat')))
+        * F.cos(F.radians(F.col('user_1_lat'))) * F.sin(F.col('pre_lon') / 2) ** 2
+    )) * 2 * 6371) \
+    .filter(F.col('dist') <= 1) \
+    .withColumn("TIME",F.col("datetime_1").cast("Timestamp"))\
+    .withColumn("local_time",F.from_utc_timestamp(F.col("TIME"),F.col('timezone_1')))
+```
+
+Соберем список пользователей, которые писали друг другу:
+
+```python 
+events_pairs = events.selectExpr('event.message_from as user_id','event.message_to as user_id_2') \
+               .where(F.col('user_id_2').isNotNull())
+			   
+events_pairs_union = events_pairs.union(events_pairs.select('user_id_2', 'user_id')).distinct()
+```
+
+Для получения итогового результата воспользуемся типом джойна **left-anti**, 
+чтобы отсечь пользователей, которые уже переписывались:
+
+```python 
+result = distance \
+    .join(events_pairs_union, ['user_id', 'user_id_2'], 'left_anti') \
+    .withColumn('processed_dttm', F.current_timestamp()) \
+    .selectExpr('user_id as user_left', 'user_id_2 as user_right', 'processed_dttm', 'city_1 as city', 'local_time') \
+	.distinct()
+```
+
+Джоба: **/src/scripts/dm_rec.py**
+
+Локальный тестовый **.ipynb**: **/src/dm_rec.ipynb** 
+
+### 2.4 Автоматизация
+
+Для того, чтобы витрины рассчитывались ежедневно соберем DAG и поставим его на регламент в Airflow.
+
+Код DAG'a: **/src/dags/dag_social_rec.py**
+
+## Итоги
+
+В рамках данного проекта был разработан **Data Lake**, который содержит 4 слоя: RAW, ODS, Sandbox и DataMart.
+Также были написаны на **pyspark** 3 джобы для сборки 3-х витрин.
+После был написан DAG для регулярного обновления витрин.
+
+Джобы лежат здесь: **/src/scripts**
+Итоговый DAG: **/src/dags**
+Для ознакомления загружены тестовые **Jupyter**-ноутбуки: **/src**
