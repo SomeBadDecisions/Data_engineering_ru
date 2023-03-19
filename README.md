@@ -85,18 +85,11 @@ events.write.partitionBy("event_type","date")\
 
 Прежде всего необходимо определить, в каком городе было совершено событие.
 У нас есть файл geo.csv с координатами центров городов.
-Для решения задачи найдем расстояние от координаты отправленного сообщения до центра города по формуле:
 
-![formula](https://user-images.githubusercontent.com/63814959/225387346-3b1cd57e-65fa-4ca3-bfa5-863ea0b11974.png)
+Для решения задачи воспользуемся формулой расстояния между двумя точками на сфере. 
+Результат умножим на радиус Земли, примерно равный 6371 км.
 
-где:
-
-- **φ1** — широта первой точки;
-- **φ2** — широта второй точки;
-- **λ1** — долгота первой точки;
-- **λ2** — долгота второй точки;
-- **r** — радиус Земли, примерно равный 6371 км.
-
+И в данных, и в справочнике широта и долгота указана в градусах. Для этой задачи необходимо перевести значения в радианы.
 Загрузим справочник с координатами городов в HDFS и прочиатем его:
 
 ```console
@@ -104,5 +97,79 @@ hdfs dfs -copyFromLocal geo.csv /user/konstantin/data/
 ```
 
 ```python 
-geo = spark.read.csv("/user/konstantin/data/geo.csv", sep=';', header= True)
+geo = spark.read.csv("/user/konstantin/data/geo.csv", sep=';', header= True)\
+      .withColumn("lat_r", F.radians(F.col("lat")))\
+      .withColumn("lng_r", F.radians(F.col("lng")))\
+      .drop("lat")\
+      .drop("lng")
+```
+Далее прочитаем сами данные:
+
+```python
+events_geo = spark.read.parquet(events_path) \
+    .where("event_type == 'message'")\
+    .withColumn("m_lat_r", F.radians(F.col("lat")))\
+    .withColumn("m_lng_r", F.radians(F.col("lon")))\
+    .withColumn('user_id', F.col('event.message_from'))\
+    .withColumn('event_id', F.monotonically_increasing_id())\
+	.drop("lat")\
+	.drop("lon")
+```
+
+После сджойним данные со справочником для последующего вычисления ближайшего центра города и определения home_city:
+
+```python
+events_city = events_geo \
+                .crossJoin(geo) \
+                .withColumn('diff', F.acos(F.sin(F.col('m_lat_r'))*F.sin(F.col('lat_r')) + 
+				F.cos(F.col('m_lat_r'))*F.cos(F.col('lat_r'))*F.cos(F.col('m_lng_r')-F.col('lng_r')))*F.lit(6371))
+```
+
+Отбросим неподходящие города и оставим только наименее удаленные:
+
+```python
+window = Window().partitionBy('event_id').orderBy(F.col('diff'))
+real_city = events_city\
+            .withColumn("row_number", F.row_number().over(window))\
+            .filter(F.col('row_number')==1)\
+            .drop("row_number")
+```
+
+Далее найдем актуальный адрес, то есть город в котором находился пользователь во время отправки последнего сообщения:
+
+```python
+window = Window().partitionBy('user_id').orderBy(F.col("date").desc())
+last_city = real_city \
+            .withColumn("row_number", F.row_number().over(window)) \
+            .filter(F.col("row_number")==1) \
+            .selectExpr('user_id', 'city as act_city')
+```
+
+Соберем список всех городов, которые посещал пользователь (в порядке посещения):
+
+```python
+window = Window().partitionBy('user_id').orderBy(F.col("date"))
+cities_list = real_city \
+              .withColumn("cities_list", F.collect_list("city").over(window)) \
+              .groupBy("user_id").agg(F.max('cities_list'). alias('travel_array'))
+```
+
+Найдем домашний город:
+
+```python 
+window = Window().partitionBy('user_id', 'id').orderBy(F.col('date'))
+ 
+pre_home = real_city \
+    .withColumn("dense_rank", F.dense_rank().over(window)) \
+    .withColumn("date_diff", F.datediff(F.col('date').cast(DateType()), F.to_date(F.col("dense_rank").cast("string"), 'd'))) \
+    .selectExpr('date_diff', 'user_id', 'date', "id as city_id", "city as home_city" ) \
+    .groupBy("user_id", "date_diff", "city_id", "home_city") \
+    .agg(F.countDistinct(F.col('date')).alias('cnt_city'))
+	
+window = Window().partitionBy('user_id')
+home_geo = pre_home \
+        .withColumn('max_dt', F.max(F.col('date_diff')) \
+                .over(window))\
+.filter((F.col('cnt_city')>27) & (F.col('date_diff') == F.col('max_dt'))) \
+.selectExpr("user_id", "home_city")
 ```
