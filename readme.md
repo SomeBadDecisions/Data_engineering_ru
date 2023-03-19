@@ -7,3 +7,5 @@
 - **Airflow**
 - **MongoDb**
 - **Vertica**
+- **Hadoop**
+- **pySpark**
