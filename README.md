@@ -96,83 +96,136 @@ events.write.partitionBy("event_type","date")\
 Загрузим справочник с координатами городов в HDFS и прочиатем его:
 
 ```console
-hdfs dfs -copyFromLocal geo.csv /user/konstantin/data/
+hdfs dfs -copyFromLocal geo_timezone.csv /user/konstantin/data/
 ```
 
 ```python 
-geo = spark.read.csv("/user/konstantin/data/geo.csv", sep=';', header= True)\
-      .withColumn("lat_r", F.radians(F.col("lat")))\
-      .withColumn("lng_r", F.radians(F.col("lng")))\
-      .drop("lat")\
-      .drop("lng")
+geo = spark.read.csv(geo_path, sep=';', header= True)\
+      .withColumnRenamed("lat", "city_lat")\
+      .withColumnRenamed("lng", "city_lon")
 ```
 Далее прочитаем сами данные:
 
 ```python
 events_geo = spark.read.parquet(events_path) \
     .where("event_type == 'message'")\
-    .withColumn("m_lat_r", F.radians(F.col("lat")))\
-    .withColumn("m_lng_r", F.radians(F.col("lon")))\
+    .withColumnRenamed("lat", "msg_lat")\
+    .withColumnRenamed("lon","msg_lon")\
     .withColumn('user_id', F.col('event.message_from'))\
-    .withColumn('event_id', F.monotonically_increasing_id())\
-	.drop("lat")\
-	.drop("lon")
+    .withColumn('event_id', F.monotonically_increasing_id())
 ```
 
-После сджойним данные со справочником для последующего вычисления ближайшего центра города и определения home_city:
+Напишем функцию для определения реального города для каждого события. В функции воспользуемся описанной выше формулой расстояния между двумя тчоками:
 
 ```python
-events_city = events_geo \
-                .crossJoin(geo) \
-                .withColumn('diff', F.acos(F.sin(F.col('m_lat_r'))*F.sin(F.col('lat_r')) + 
-				F.cos(F.col('m_lat_r'))*F.cos(F.col('lat_r'))*F.cos(F.col('m_lng_r')-F.col('lng_r')))*F.lit(6371))
+def get_city(events_geo, geo):
+
+    EARTH_R = 6371
+
+    calculate_diff = 2 * F.lit(EARTH_R) * F.asin(
+            F.sqrt(
+                F.pow(F.sin((F.radians(F.col("msg_lat")) - F.radians(F.col("city_lat"))) / 2), 2) +
+                F.cos(F.radians(F.col("msg_lat"))) * F.cos(F.radians(F.col("city_lat"))) *
+                F.pow(F.sin((F.radians(F.col("msg_lon")) - F.radians(F.col("city_lon"))) / 2), 2)
+            )
+        )
+
+    window = Window().partitionBy('user_id').orderBy(F.col('diff').asc())
+    events = events_geo \
+            .crossJoin(geo) \
+            .withColumn('diff', calculate_diff) \
+            .withColumn("row_number", F.row_number().over(window)) \
+            .filter(F.col('row_number')==1) \
+            .drop('row_number') 
+    
+
+    return events
+	
+	
+events = get_city(
+    events_geo=events_geo,
+    geo=geo
+)
 ```
 
-Отбросим неподходящие города и оставим только наименее удаленные:
 
-```python
-window = Window().partitionBy('event_id').orderBy(F.col('diff'))
-real_city = events_city\
-            .withColumn("row_number", F.row_number().over(window))\
-            .filter(F.col('row_number')==1)\
-            .drop("row_number")
-```
 
 Далее найдем актуальный адрес, то есть город в котором находился пользователь во время отправки последнего сообщения:
 
 ```python
-window = Window().partitionBy('user_id').orderBy(F.col("date").desc())
-last_city = real_city \
-            .withColumn("row_number", F.row_number().over(window)) \
-            .filter(F.col("row_number")==1) \
-            .selectExpr('user_id', 'city as act_city')
+window_act_city = Window().partitionBy('user_id').orderBy(F.col("date").desc())
+act_city = events \
+            .withColumn("row_number", F.row_number().over(window_last_city)) \
+            .filter(F.col("row_number")==1)
 ```
 
-Соберем список всех городов, которые посещал пользователь (в порядке посещения):
+Найдем список посещенных городов (будем исходить из того, что активность должна быть каждый день):
 
 ```python
-window = Window().partitionBy('user_id').orderBy(F.col("date"))
-cities_list = real_city \
-              .withColumn("cities_list", F.collect_list("city").over(window)) \
-              .groupBy("user_id").agg(F.max('cities_list'). alias('travel_array'))
+window_travel = Window().partitionBy('user_id', 'id').orderBy(F.col('date'))
+travels = events \
+    .withColumn("dense_rank", F.dense_rank().over(window_travel)) \
+    .withColumn("date_diff", F.datediff(F.col('date').cast(DateType()), F.to_date(F.col("dense_rank").cast("string"), 'd'))) \
+    .selectExpr('date_diff', 'user_id', 'date', "id", "city" ) \
+    .groupBy("user_id", "date_diff", "id", "city") \
+    .agg(F.countDistinct(F.col('date')).alias('cnt_days'))
+	
+travels_array = travels.groupBy("user_id") \
+    .agg(F.collect_list('city').alias('travel_array')) \
+    .select('user_id', 'travel_array', F.size('travel_array').alias('travel_count'))
 ```
 
 Найдем домашний город:
 
 ```python 
-window = Window().partitionBy('user_id', 'id').orderBy(F.col('date'))
- 
-pre_home = real_city \
-    .withColumn("dense_rank", F.dense_rank().over(window)) \
-    .withColumn("date_diff", F.datediff(F.col('date').cast(DateType()), F.to_date(F.col("dense_rank").cast("string"), 'd'))) \
-    .selectExpr('date_diff', 'user_id', 'date', "id as city_id", "city as home_city" ) \
-    .groupBy("user_id", "date_diff", "city_id", "home_city") \
-    .agg(F.countDistinct(F.col('date')).alias('cnt_city'))
-	
-window = Window().partitionBy('user_id')
-home_geo = pre_home \
-        .withColumn('max_dt', F.max(F.col('date_diff')) \
-                .over(window))\
-.filter((F.col('cnt_city')>27) & (F.col('date_diff') == F.col('max_dt'))) \
-.selectExpr("user_id", "home_city")
+home = travels.filter((F.col('cnt_days')>27)) \
+    .withColumn('max_dt', F.max(F.col('date_diff')).over(Window().partitionBy('user_id')))\
+    .where(F.col('date_diff') == F.col('max_dt')) \
+    .selectExpr('user_id', 'city as home_city')
 ```
+
+Напишем функцию для определения локального времени актуального города:
+
+```python
+def calc_local_tm(events):    
+    return events.withColumn("TIME",F.col("event.datetime").cast("Timestamp"))\
+        .withColumn("local_time",F.from_utc_timestamp(F.col("TIME"),F.col('timezone')))\
+        .select("local_time", 'user_id')
+		
+local_time = calc_local_tm(act_city)
+```
+
+Все необходимые данные готовы, осталось собрать итоговый результат:
+
+```python
+result = events \
+        .join(act_city, ['user_id'], 'left') \
+        .join(travels_array,['user_id'], 'left') \
+        .join(home, ['user_id'], 'left') \
+        .join(local_time, ['user_id'], 'left') \
+        .selectExpr('user_id', 'act_city', 'home_city', 'travel_count', 'travel_array', 'local_time')
+```
+
+Для сборки финальной джобы потребуются 2 функции. 
+Первая будет подтягивать спарк-сессию, вторая будет записывать итоговый результат.
+
+Функция для инициализации спарк-сессии:
+
+```python
+def spark_session_init(name):
+    return SparkSession \
+        .builder \
+        .master("yarn")\
+        .appName(f"{name}") \
+        .getOrCreate()
+```
+
+Функция для записи:
+```python 
+def write_df(df, df_name, date):
+    df.write.mode('overwrite').parquet(f'/user/konstantin/prod/{df_name}/date={date}')
+```
+
+Функции вынесем в отдельный файл: **/src/scripts/tools.py**
+Финальная джоба: **/src/scripts/dm_users.py** 
+Локальный тестовый **.ipynb**: **/src/dm_users.ipynb** 
