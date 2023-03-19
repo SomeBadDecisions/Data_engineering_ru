@@ -35,7 +35,7 @@ def get_city(events_geo, geo):
             )
         )
 
-    window = Window().partitionBy('user_id').orderBy(F.col('diff').asc())
+    window = Window().partitionBy('event_id').orderBy(F.col('diff').asc())
     events = events_geo \
             .crossJoin(geo) \
             .withColumn('diff', calculate_diff) \
@@ -86,6 +86,7 @@ result = events \
         .join(travels_array,['user_id'], 'left') \
         .join(home, ['user_id'], 'left') \
         .join(local_time, ['user_id'], 'left') \
-        .selectExpr('user_id', 'act_city', 'home_city', 'travel_count', 'travel_array', 'local_time')
+        .selectExpr('user_id', 'act_city', 'home_city', 'travel_count', 'travel_array', 'local_time') \
+        .distinct()
 
 write_df(result, 'dm_users', date)

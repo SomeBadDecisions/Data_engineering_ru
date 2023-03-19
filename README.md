@@ -209,7 +209,7 @@ result = events \
 Для сборки финальной джобы потребуются 2 функции. 
 Первая будет подтягивать спарк-сессию, вторая будет записывать итоговый результат.
 
-Функция для инициализации спарк-сессии:
+Функция для инициализации спарк-сессии (в общем виде, т.к. не известны параметры кластера):
 
 ```python
 def spark_session_init(name):
@@ -227,5 +227,42 @@ def write_df(df, df_name, date):
 ```
 
 Функции вынесем в отдельный файл: **/src/scripts/tools.py**
+
 Финальная джоба: **/src/scripts/dm_users.py** 
+
 Локальный тестовый **.ipynb**: **/src/dm_users.ipynb** 
+
+### 2.1 Витрина в разрезе зон
+
+Создадим витрине с распределением различных событий по городам.
+Данная витрина поможет понимать поведение пользователей в зависимости от географической зоны.
+
+Для начала необходимо вновь прочитать данные. 
+Этот шаг никак не будет отличаться от предыдущей витрины за исключением того, 
+что отбирать будем все события, а не только с типом "сообщение".
+
+Соберем витрину:
+
+```python
+w_week = Window.partitionBy(['city', F.trunc(F.col("date"), "week")])
+w_month = Window.partitionBy(['city', F.trunc(F.col("date"), "month")])
+
+df_zones = events.withColumn('week_message', F.count(F.when(events.event_type == 'message','event_id')).over(w_week)) \
+    .withColumn('week_reaction', F.count(F.when(events.event_type == 'reaction','event_id')).over(w_week)) \
+    .withColumn('week_subscription', F.count(F.when(events.event_type == 'subscription','event_id')).over(w_week)) \
+    .withColumn('week_user', F.count(F.when(events.event_type == 'registration','event_id')).over(w_week)) \
+    .withColumn('month_message', F.count(F.when(events.event_type == 'message','event_id')).over(w_month)) \
+    .withColumn('month_reaction', F.count(F.when(events.event_type == 'reaction','event_id')).over(w_month)) \
+    .withColumn('month_subscription', F.count(F.when(events.event_type == 'subscription','event_id')).over(w_month)) \
+    .withColumn('month_user', F.count(F.when(events.event_type == 'registration','event_id')).over(w_month)) \
+    .withColumn('month', F.trunc(F.col("date"), "month")) \
+    .withColumn('week', F.trunc(F.col("date"), "week")) \
+    .selectExpr('month', 'week', 'id as zone_id', 'week_message', 'week_reaction', 'week_subscription', 'week_user', \
+            'month_message', 'month_reaction', 'month_subscription', 'month_user') \
+    .distinct()
+```
+
+Джоба: **/src/scripts/dm_zone.py**
+
+Локальный тестовый **.ipynb**: **/src/dm_zone.ipynb** 
+
