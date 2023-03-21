@@ -1,7 +1,7 @@
 import pyspark.sql.functions as F 
 from pyspark.sql.types import DateType
 from pyspark.sql.window import Window
-from tools import get_spark_session, write_dm
+from tools import get_spark_session, write_df
 import sys
 
 date = sys.argv[1]
@@ -22,7 +22,7 @@ geo = spark.read.csv(geo_path, sep=';', header= True)\
       .withColumnRenamed("lat", "city_lat")\
       .withColumnRenamed("lng", "city_lon")
 
-def get_city_event(events_geo, geo):
+def get_city(events_geo, geo):
 
     EARTH_R = 6371
 
@@ -53,18 +53,38 @@ events = get_city(
 w_week = Window.partitionBy(['city', F.trunc(F.col("date"), "week")])
 w_month = Window.partitionBy(['city', F.trunc(F.col("date"), "month")])
 
-result = events.withColumn('week_message', F.count(F.when(events.event_type == 'message','event_id')).over(w_week)) \
+pre_result = events.withColumn('week_message', F.count(F.when(events.event_type == 'message','event_id')).over(w_week)) \
     .withColumn('week_reaction', F.count(F.when(events.event_type == 'reaction','event_id')).over(w_week)) \
     .withColumn('week_subscription', F.count(F.when(events.event_type == 'subscription','event_id')).over(w_week)) \
-    .withColumn('week_user', F.count(F.when(events.event_type == 'registration','event_id')).over(w_week)) \
     .withColumn('month_message', F.count(F.when(events.event_type == 'message','event_id')).over(w_month)) \
     .withColumn('month_reaction', F.count(F.when(events.event_type == 'reaction','event_id')).over(w_month)) \
     .withColumn('month_subscription', F.count(F.when(events.event_type == 'subscription','event_id')).over(w_month)) \
-    .withColumn('month_user', F.count(F.when(events.event_type == 'registration','event_id')).over(w_month)) \
     .withColumn('month', F.trunc(F.col("date"), "month")) \
     .withColumn('week', F.trunc(F.col("date"), "week")) \
-    .selectExpr('month', 'week', 'id as zone_id', 'week_message', 'week_reaction', 'week_subscription', 'week_user', \
-            'month_message', 'month_reaction', 'month_subscription', 'month_user') \
+    .selectExpr('month', 'week', 'id as zone_id', 'week_message', 'week_reaction', 'week_subscription', \
+            'month_message', 'month_reaction', 'month_subscription') \
     .distinct()
+
+window = Window.partitionBy('user_id').orderBy(F.col('date'))
+reg = events \
+        .withColumn('min_date', F.min('date').over(window)) \
+        .withColumn('first_city', F.first('id').over(window)) \
+        .withColumn('week', F.trunc(F.col("min_date"), "week")) \
+        .withColumn('month', F.trunc(F.col("min_date"), "month")) \
+        .selectExpr("user_id", "first_city",  "min_date", "week", "month") \
+        .distinct() 
+
+r_week = Window.partitionBy(['first_city', "week"])
+r_month = Window.partitionBy(['first_city', "month"])
+
+reg_agg = reg \
+        .withColumn('week_user', F.count('user_id').over(r_week)) \
+        .withColumn('month_user', F.count('user_id').over(r_month)) \
+        .selectExpr('month', 'week', 'month_user', 'week_user', 'first_city as zone_id') \
+        .distinct()
+
+result = pre_result.join(reg_agg, ['week', 'month', 'zone_id'], 'left') \
+        .select(pre_result['month'], 'week', 'zone_id', 'week_message', 'week_reaction', 'week_subscription', 'week_user', \
+            'month_message', 'month_reaction', 'month_subscription', 'month_user')
 
 write_df(result, 'dm_zone', date)

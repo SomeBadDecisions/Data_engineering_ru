@@ -114,6 +114,38 @@ events_geo = spark.read.parquet(events_path) \
     .withColumn('user_id', F.col('event.message_from'))\
     .withColumn('event_id', F.monotonically_increasing_id())
 ```
+С учетом добавленных полей, данные имеют следующую структуру:
+
+root
+ |-- event: struct (nullable = true)
+ |    |-- admins: array (nullable = true)
+ |    |    |-- element: long (containsNull = true)
+ |    |-- channel_id: long (nullable = true)
+ |    |-- datetime: string (nullable = true)
+ |    |-- media: struct (nullable = true)
+ |    |    |-- media_type: string (nullable = true)
+ |    |    |-- src: string (nullable = true)
+ |    |-- message: string (nullable = true)
+ |    |-- message_channel_to: long (nullable = true)
+ |    |-- message_from: long (nullable = true)
+ |    |-- message_group: long (nullable = true)
+ |    |-- message_id: long (nullable = true)
+ |    |-- message_to: long (nullable = true)
+ |    |-- message_ts: string (nullable = true)
+ |    |-- reaction_from: string (nullable = true)
+ |    |-- reaction_type: string (nullable = true)
+ |    |-- subscription_channel: long (nullable = true)
+ |    |-- subscription_user: string (nullable = true)
+ |    |-- tags: array (nullable = true)
+ |    |    |-- element: string (containsNull = true)
+ |    |-- user: string (nullable = true)
+ |-- event_type: string (nullable = true)
+ |-- msg_lat: double (nullable = true)
+ |-- msg_lon: double (nullable = true)
+ |-- date: date (nullable = true)
+ |-- event_id: long (nullable = false)
+ |-- user_id: long (nullable = true)
+
 
 Напишем функцию для определения реального города для каждого события. В функции воспользуемся описанной выше формулой расстояния между двумя тчоками:
 
@@ -155,33 +187,43 @@ events = get_city(
 ```python
 window_act_city = Window().partitionBy('user_id').orderBy(F.col("date").desc())
 act_city = events \
-            .withColumn("row_number", F.row_number().over(window_last_city)) \
-            .filter(F.col("row_number")==1)
+            .withColumn("row_number", F.row_number().over(window_act_city)) \
+            .filter(F.col("row_number")==1) \
+            .withColumnRenamed('city', 'act_city')
 ```
 
-Найдем список посещенных городов (будем исходить из того, что активность должна быть каждый день):
+Составим список непрерывного пребывания в одном городе опираясь на дату сообщения из следующего. 
+На основании этой выборки найдем список посещенных городов, их количество и домашний город:
 
 ```python
-window_travel = Window().partitionBy('user_id', 'id').orderBy(F.col('date'))
+window = Window.partitionBy('user_id').orderBy('date')
+
 travels = events \
-    .withColumn("dense_rank", F.dense_rank().over(window_travel)) \
-    .withColumn("date_diff", F.datediff(F.col('date').cast(DateType()), F.to_date(F.col("dense_rank").cast("string"), 'd'))) \
-    .selectExpr('date_diff', 'user_id', 'date', "id", "city" ) \
-    .groupBy("user_id", "date_diff", "id", "city") \
-    .agg(F.countDistinct(F.col('date')).alias('cnt_days'))
-	
-travels_array = travels.groupBy("user_id") \
+            .withColumn('pre_city', F.lag('city').over(window)) \
+            .withColumn('series', F.when(F.col('city') == F.col('pre_city'), F.lit(0)).otherwise(F.lit(1))) \
+            .select('user_id', 'date', 'city', 'pre_city', 'series') \
+            .withColumn('sum_series', F.sum('series').over(window)) \
+            .groupBy('sum_series', 'user_id', 'city').agg(F.min('date').alias('date')) \
+            .drop('sum_series')
+			
+travels_array = travels \
+            .groupBy("user_id") \
     .agg(F.collect_list('city').alias('travel_array')) \
     .select('user_id', 'travel_array', F.size('travel_array').alias('travel_count'))
-```
+	
+window = Window.partitionBy('user_id').orderBy('date')
+window_desc = Window.partitionBy('user_id').orderBy(F.col('date').desc())
 
-Найдем домашний город:
-
-```python 
-home = travels.filter((F.col('cnt_days')>27)) \
-    .withColumn('max_dt', F.max(F.col('date_diff')).over(Window().partitionBy('user_id')))\
-    .where(F.col('date_diff') == F.col('max_dt')) \
-    .selectExpr('user_id', 'city as home_city')
+home = travels \
+        .withColumn('next_date', F.lead('date').over(window)) \
+        .withColumn('days_staying', F.when(F.col('next_date').isNull(), '1') \
+        .otherwise(F.datediff(F.col('next_date'), F.col('date')))) \
+        .filter('days_staying > 27') \
+        .withColumn('rn', F.row_number().over(window_desc)) \
+        .filter('rn == 1') \
+        .drop('rn') \
+        .withColumnRenamed('city', 'home_city')
+		
 ```
 
 Напишем функцию для определения локального времени актуального города:
@@ -242,27 +284,50 @@ def write_df(df, df_name, date):
 Этот шаг никак не будет отличаться от предыдущей витрины за исключением того, 
 что отбирать будем все события, а не только с типом "сообщение".
 
-Соберем витрину:
+В данных не предусмотрены события с типом "регистрация", поэтому для начала соберем без них:
 
 ```python
 w_week = Window.partitionBy(['city', F.trunc(F.col("date"), "week")])
 w_month = Window.partitionBy(['city', F.trunc(F.col("date"), "month")])
 
-df_zones = events.withColumn('week_message', F.count(F.when(events.event_type == 'message','event_id')).over(w_week)) \
+pre_result = events.withColumn('week_message', F.count(F.when(events.event_type == 'message','event_id')).over(w_week)) \
     .withColumn('week_reaction', F.count(F.when(events.event_type == 'reaction','event_id')).over(w_week)) \
     .withColumn('week_subscription', F.count(F.when(events.event_type == 'subscription','event_id')).over(w_week)) \
-    .withColumn('week_user', F.count(F.when(events.event_type == 'registration','event_id')).over(w_week)) \
     .withColumn('month_message', F.count(F.when(events.event_type == 'message','event_id')).over(w_month)) \
     .withColumn('month_reaction', F.count(F.when(events.event_type == 'reaction','event_id')).over(w_month)) \
     .withColumn('month_subscription', F.count(F.when(events.event_type == 'subscription','event_id')).over(w_month)) \
-    .withColumn('month_user', F.count(F.when(events.event_type == 'registration','event_id')).over(w_month)) \
     .withColumn('month', F.trunc(F.col("date"), "month")) \
     .withColumn('week', F.trunc(F.col("date"), "week")) \
-    .selectExpr('month', 'week', 'id as zone_id', 'week_message', 'week_reaction', 'week_subscription', 'week_user', \
-            'month_message', 'month_reaction', 'month_subscription', 'month_user') \
+    .selectExpr('month', 'week', 'id as zone_id', 'week_message', 'week_reaction', 'week_subscription', \
+            'month_message', 'month_reaction', 'month_subscription') \
     .distinct()
 ```
 
+Далее рассчитаем дату первого события для каждого пользователя и сджойним:
+
+```python
+window = Window.partitionBy('user_id').orderBy(F.col('date'))
+reg = events \
+        .withColumn('min_date', F.min('date').over(window)) \
+        .withColumn('first_city', F.first('id').over(window)) \
+        .withColumn('week', F.trunc(F.col("min_date"), "week")) \
+        .withColumn('month', F.trunc(F.col("min_date"), "month")) \
+        .selectExpr("user_id", "first_city",  "min_date", "week", "month") \
+        .distinct() 
+		
+r_week = Window.partitionBy(['first_city', "week"])
+r_month = Window.partitionBy(['first_city', "month"])
+
+reg_agg = reg \
+        .withColumn('week_user', F.count('user_id').over(r_week)) \
+        .withColumn('month_user', F.count('user_id').over(r_month)) \
+        .selectExpr('month', 'week', 'month_user', 'week_user', 'first_city as zone_id') \
+        .distinct()
+		
+result = pre_result.join(reg_agg, ['week', 'month', 'zone_id'], 'left') \
+        .select(pre_result['month'], 'week', 'zone_id', 'week_message', 'week_reaction', 'week_subscription', 'week_user', \
+            'month_message', 'month_reaction', 'month_subscription', 'month_user')
+```
 Джоба: **/src/scripts/dm_zone.py**
 
 Локальный тестовый **.ipynb**: **/src/dm_zone.ipynb** 

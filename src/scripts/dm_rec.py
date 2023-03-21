@@ -1,7 +1,7 @@
 import pyspark.sql.functions as F 
 from pyspark.sql.types import DateType
 from pyspark.sql.window import Window
-from tools import get_spark_session, write_dm
+from tools import get_spark_session, write_df
 import sys
 
 date = sys.argv[1]
@@ -53,7 +53,7 @@ events = get_city(
 window_last_msg = Window.partitionBy('user_id').orderBy(F.col('event.message_ts').desc())
 last_msg = events.where("event_type == 'message'") \
     .where('msg_lon is not null') \
-    .withColumn("rn",F.row_number().over(window_last)) \
+    .withColumn("rn",F.row_number().over(window_last_msg)) \
     .filter(F.col('rn') == 1) \
     .drop(F.col('rn')) \
     .selectExpr('user_id', 'msg_lon as lon', 'msg_lat as lat', 'city', 'event.datetime as datetime', 'timezone')
