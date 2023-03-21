@@ -116,36 +116,7 @@ events_geo = spark.read.parquet(events_path) \
 ```
 С учетом добавленных полей, данные имеют следующую структуру:
 
-root
- |-- event: struct (nullable = true)
- |    |-- admins: array (nullable = true)
- |    |    |-- element: long (containsNull = true)
- |    |-- channel_id: long (nullable = true)
- |    |-- datetime: string (nullable = true)
- |    |-- media: struct (nullable = true)
- |    |    |-- media_type: string (nullable = true)
- |    |    |-- src: string (nullable = true)
- |    |-- message: string (nullable = true)
- |    |-- message_channel_to: long (nullable = true)
- |    |-- message_from: long (nullable = true)
- |    |-- message_group: long (nullable = true)
- |    |-- message_id: long (nullable = true)
- |    |-- message_to: long (nullable = true)
- |    |-- message_ts: string (nullable = true)
- |    |-- reaction_from: string (nullable = true)
- |    |-- reaction_type: string (nullable = true)
- |    |-- subscription_channel: long (nullable = true)
- |    |-- subscription_user: string (nullable = true)
- |    |-- tags: array (nullable = true)
- |    |    |-- element: string (containsNull = true)
- |    |-- user: string (nullable = true)
- |-- event_type: string (nullable = true)
- |-- msg_lat: double (nullable = true)
- |-- msg_lon: double (nullable = true)
- |-- date: date (nullable = true)
- |-- event_id: long (nullable = false)
- |-- user_id: long (nullable = true)
-
+![schema](https://user-images.githubusercontent.com/63814959/226731775-9290acd7-13ad-4c16-a851-ae6260547961.png)
 
 Напишем функцию для определения реального города для каждого события. В функции воспользуемся описанной выше формулой расстояния между двумя тчоками:
 
@@ -245,8 +216,14 @@ result = events \
         .join(travels_array,['user_id'], 'left') \
         .join(home, ['user_id'], 'left') \
         .join(local_time, ['user_id'], 'left') \
-        .selectExpr('user_id', 'act_city', 'home_city', 'travel_count', 'travel_array', 'local_time')
+        .selectExpr('user_id', 'act_city', 'home_city', 'travel_count', 'travel_array', 'local_time') \
+        .distinct()
 ```
+Итог выглядит так:
+
+
+![image](https://user-images.githubusercontent.com/63814959/226732751-ca4aa9a4-85fc-47fd-ba32-e2b1c20059b5.png)
+
 
 Для сборки финальной джобы потребуются 2 функции. 
 Первая будет подтягивать спарк-сессию, вторая будет записывать итоговый результат.
