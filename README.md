@@ -24,24 +24,32 @@
 
 Пример входного сообщения:
 
-```javascript
-first_message:{"restaurant_id": "123e4567-e89b-12d3-a456-426614174000","adv_campaign_id": "123e4567-e89b-12d3-a456-426614174003",
-"adv_campaign_content": "first campaign","adv_campaign_owner": "Ivanov Ivan Ivanovich","adv_campaign_owner_contact": "iiivanov@restaurant.ru",
-"adv_campaign_datetime_start": 1659203516,"adv_campaign_datetime_end": 2659207116,"datetime_created": 1659131516}
+```json
+first_message:
+{
+  "restaurant_id": "123e4567-e89b-12d3-a456-426614174000",
+  "adv_campaign_id": "123e4567-e89b-12d3-a456-426614174003",
+  "adv_campaign_content": "first campaign",
+  "adv_campaign_owner": "Ivanov Ivan Ivanovich",
+  "adv_campaign_owner_contact": "iiivanov@restaurant.ru",
+  "adv_campaign_datetime_start": 1659203516,
+  "adv_campaign_datetime_end": 2659207116,
+  "datetime_created": 1659131516
+}
 ```
 
 где:
 
-- **first_message** — ключ. В рамках задачи он может быть произвольным, но для тестирования кода можно использовать номер сообщения;
+- **`first_message`** — ключ. В рамках задачи он может быть произвольным, но для тестирования кода можно использовать номер сообщения;
 - **`:`** — разделитель ключа и сообщения;
-- **"restaurant_id"**: "123e4567-e89b-12d3-a456-426614174000", — UUID ресторана;
-- **"adv_campaign_id"**: "123e4567-e89b-12d3-a456-426614174003", — UUID рекламной кампании;
-- **"adv_campaign_content"**: "first campaign", — текст кампании;
-- **"adv_campaign_owner"**: "Ivanov Ivan Ivanovich", — сотрудник ресторана, который является владельцем кампании;
-- **"adv_campaign_owner_contact"**: "iiivanov@restaurant.ru", — его контакт;
-- **"adv_campaign_datetime_start"**: 1659203516, — время начала рекламной кампании в формате timestamp;
-- **"adv_campaign_datetime_end"**: 2659207116, — время её окончания в формате timestamp;
-- **"datetime_created"**: 1659131516 — время создания кампании в формате timestamp.
+- **`"restaurant_id"`**: "123e4567-e89b-12d3-a456-426614174000", — UUID ресторана;
+- **`"adv_campaign_id"`**: "123e4567-e89b-12d3-a456-426614174003", — UUID рекламной кампании;
+- **`"adv_campaign_content"`**: "first campaign", — текст кампании;
+- **`"adv_campaign_owner"`**: "Ivanov Ivan Ivanovich", — сотрудник ресторана, который является владельцем кампании;
+- **`"adv_campaign_owner_contact"`**: "iiivanov@restaurant.ru", — его контакт;
+- **`"adv_campaign_datetime_start"`**: 1659203516, — время начала рекламной кампании в формате timestamp;
+- **`"adv_campaign_datetime_end"`**: 2659207116, — время её окончания в формате timestamp;
+- **`"datetime_created"`**: 1659131516 — время создания кампании в формате timestamp.
 
 **2. получать список подписчиков из Postgres**
 
@@ -87,15 +95,23 @@ CREATE TABLE public.subscribers_feedback (
 Структура выходного сообщения:
 
 ```json
-{"restaurant_id":"123e4567-e89b-12d3-a456-426614174000","adv_campaign_id":"123e4567-e89b-12d3-a456-426614174003",
-"adv_campaign_content":"first campaign","adv_campaign_owner":"Ivanov Ivan Ivanovich","adv_campaign_owner_contact":"iiivanov@restaurant.ru",
-"adv_campaign_datetime_start":1659203516,"adv_campaign_datetime_end":2659207116,"client_id":"023e4567-e89b-12d3-a456-426614174000",
-"datetime_created":1659131516,"trigger_datetime_created":1659304828}
+{
+  "restaurant_id":"123e4567-e89b-12d3-a456-426614174000",
+  "adv_campaign_id":"123e4567-e89b-12d3-a456-426614174003",
+  "adv_campaign_content":"first campaign",
+  "adv_campaign_owner":"Ivanov Ivan Ivanovich",
+  "adv_campaign_owner_contact":"iiivanov@restaurant.ru",
+  "adv_campaign_datetime_start":1659203516,
+  "adv_campaign_datetime_end":2659207116,
+  "client_id":"023e4567-e89b-12d3-a456-426614174000",
+  "datetime_created":1659131516,
+  "trigger_datetime_created":1659304828
+}
 ```
 
 По сравнению с входным добавляются два новый поля:
-- **"client_id"**:"023e4567-e89b-12d3-a456-426614174000" — UUID подписчика ресторана, который достаётся из таблицы Postgres.
-- **"trigger_datetime_created"**:1659304828 — время создания триггера, то есть выходного сообщения. Оно добавляется во время создания сообщения.
+- **`"client_id"`**:"023e4567-e89b-12d3-a456-426614174000" — UUID подписчика ресторана, который достаётся из таблицы Postgres.
+- **`"trigger_datetime_created"`**:1659304828 — время создания триггера, то есть выходного сообщения. Оно добавляется во время создания сообщения.
 
 **6. На основе полученной информации сервис push-уведомлений будет читать сообщения из Kafka и формировать готовые уведомления.**
 Этот шаг происходит уже без нашего участия.
