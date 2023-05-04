@@ -24,7 +24,7 @@
 
 Пример входного сообщения:
 
-```json
+```javascript
 first_message:{"restaurant_id": "123e4567-e89b-12d3-a456-426614174000","adv_campaign_id": "123e4567-e89b-12d3-a456-426614174003",
 "adv_campaign_content": "first campaign","adv_campaign_owner": "Ivanov Ivan Ivanovich","adv_campaign_owner_contact": "iiivanov@restaurant.ru",
 "adv_campaign_datetime_start": 1659203516,"adv_campaign_datetime_end": 2659207116,"datetime_created": 1659131516}
@@ -33,7 +33,7 @@ first_message:{"restaurant_id": "123e4567-e89b-12d3-a456-426614174000","adv_camp
 где:
 
 - **first_message** — ключ. В рамках задачи он может быть произвольным, но для тестирования кода можно использовать номер сообщения;
-- **:** — разделитель ключа и сообщения;
+- **`:`** — разделитель ключа и сообщения;
 - **"restaurant_id"**: "123e4567-e89b-12d3-a456-426614174000", — UUID ресторана;
 - **"adv_campaign_id"**: "123e4567-e89b-12d3-a456-426614174003", — UUID рекламной кампании;
 - **"adv_campaign_content"**: "first campaign", — текст кампании;
