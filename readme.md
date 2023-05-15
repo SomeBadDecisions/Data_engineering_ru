@@ -4,8 +4,11 @@
 
 Стэк:
 - **Postgres**
+- **Hadoop**
+- **pySpark**
+- **Kafka**
+- **Spark Streaming**
 - **Airflow**
 - **MongoDb**
 - **Vertica**
-- **Hadoop**
-- **pySpark**
+
