@@ -1,0 +1,41 @@
+replicaCount: 1
+
+image:
+  repository: cr.yandex/crpr3vvr1v5io35573fc
+  pullPolicy: IfNotPresent
+  tag: "v2023-07-30-r1"
+
+containerPort: 5000
+
+config:
+  KAFKA_HOST: "rc1a-n025j3f6lljf1fji.mdb.yandexcloud.net"
+  KAFKA_PORT: "9091"
+  KAFKA_CONSUMER_USERNAME: "producer_consumer"
+  KAFKA_CONSUMER_PASSWORD: "Init6666"
+  KAFKA_CONSUMER_GROUP: "main-consumer-group"
+  KAFKA_SOURCE_TOPIC: "order-service_orders"
+  KAFKA_DESTINATION_TOPIC: "stg-service-orders"
+
+  PG_WAREHOUSE_HOST: "rc1b-vy2x790i37h3e1ve.mdb.yandexcloud.net"
+  PG_WAREHOUSE_PORT: "6432"
+  PG_WAREHOUSE_DBNAME: "sprint9dwh"
+  PG_WAREHOUSE_USER: "konstantin"
+  PG_WAREHOUSE_PASSWORD: "Init6666"
+
+  REDIS_HOST: "c-c9qm756o0difhqfp8e5u.rw.mdb.yandexcloud.net"
+  REDIS_PORT: "6380"
+  REDIS_PASSWORD: "Init6666" 
+
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+
+podAnnotations: {}
+
+resources:
+  limits:
+    cpu: 100m
+    memory: 128Mi
+  requests:
+    cpu: 100m
+    memory: 128Mi
