@@ -14,7 +14,7 @@
 	- 2.2 [CDM](#CDM)
 		- 2.2.1 [Работа с Postgres](#Работа_с_Postgres)
 		- 2.2.2 [Работа с Kafka](#Работа_с_Kafka)
-3. [Выводы](#Выводы)
+- 3 [Выводы](#Выводы)
 
 ## 1 Описание <a name="Описание"></a>
 
@@ -54,7 +54,7 @@
 
 ![Image](https://github.com/SomeBadDecisions/Data_engineering/assets/63814959/5e8f2d13-85c6-4063-9fa0-f606d9e96f7e)
 
-Ранее мной уже был разработан первый микросервис для STG-слоя: **/cloud_service/service_stg**.
+Ранее мной уже был разработан первый микросервис для STG-слоя: /cloud_service/**service_stg**.
 
 ## 2 Создание микросервисов <a name="Создание_микросервисов"></a>
 
@@ -68,7 +68,7 @@
 
 В целях безопасности не будем прописывать параметры подключения в коде самого сервиса, а сделаем это через переменные среды.
 
-Все необходимые библиотеки пропишем в **requirements.txt**и в дальнейшем будем устанавливать из него.
+Все необходимые библиотеки пропишем в cloud_service/service_dds/**requirements.txt** и в дальнейшем будем устанавливать из него.
 
 Код будет выглядеть следующим образом:
 
@@ -107,7 +107,7 @@ CMD ["app.py"]
 
 #### 2.1.2 Docker-compose <a name="Docker-compose"></a>
 
-Добавим описание DDS-сервиса в docker-compose:
+Добавим описание DDS-сервиса в cloud_service/**docker-compose.yaml**:
 
 ```python
 dds_service:
@@ -143,7 +143,7 @@ dds_service:
 
 Подготовим файлы для релиза через Helm.
 
-В **chart.yaml** пропишем название сервиса:
+В cloud_service/service_dds/app/**Chart.yaml** пропишем название сервиса:
 
 ```python
 apiVersion: v2
@@ -153,7 +153,7 @@ type: application
 version: 0.1.0
 appVersion: "1.16.0"
 ```
-Создадим **values.yaml** (параметры подключения изменены в целях безопасности):
+Создадим cloud_service/service_dds/app/**values.yaml** (параметры подключения изменены в целях безопасности):
 
 ```python
 replicaCount: 1
@@ -202,7 +202,7 @@ resources:
 
 Для начала создадим все необходимые подключения. Для DDS-слоя это postgres и kafka.
 
-Пропишем логику подключения к kafka в **kafka_connectors.py**:
+Пропишем логику подключения к kafka в cloud_service/service_dds/src/lib/kafka_connect/**kafka_connectors.py**:
 
 ```python
 import json
@@ -275,7 +275,7 @@ class KafkaConsumer:
 
 ```
 
-Аналогично пропишем подключение к postgres в файле **pg_connect.py**:
+Аналогично пропишем подключение к postgres в файле cloud_service/service_dds/src/lib/pg/**pg_connect.py**:
 
 ```python
 from contextlib import contextmanager
@@ -326,7 +326,7 @@ class PgConnect:
 ```
 
 ##### 2.1.4.2 Работа с Postgres <a name="Работа_с_Postgres"></a>
-Далее напишем функции для заполнения таблиц DDS-слоя в Postgres и положим в файл **dds_repository.py**:
+Далее напишем функции для заполнения таблиц DDS-слоя в Postgres и положим в файл cloud_service/service_dds/src/dds_loader/repository/**dds_repository.py**:
 
 ```python
 import uuid
@@ -1071,7 +1071,7 @@ class DdsRepository:
 ```
 В целях соблюдения идемпотетности напишемд ополнительные функции для проверки наличия всех необходимых таблиц в Postgres и их создания, в случае отсутствия.
 
-Все необходимые функции, содержащие DDL, положим в файл **dds_migrations.py**:
+Все необходимые функции, содержащие DDL, положим в файл cloud_service/service_dds/src/dds_loader/repository/**dds_migrations.py**:
 
 ```python
 from lib.pg import PgConnect
@@ -1292,7 +1292,7 @@ class DdsMigrator:
 ```
 ##### 2.1.4.3 Работа с Kafka <a name="Работа_с_Kafka"></a>
 
-Перейдем к передаче данных в Kafka. Логику приема данных и их последующей передачи в новый топик опишем в файле **dds_message_processor.py**:
+Перейдем к передаче данных в Kafka. Логику приема данных и их последующей передачи в новый топик опишем в файле cloud_service/service_dds/src/dds_loader/**dds_message_processor_job.py**:
 
 ```python
 from datetime import datetime
@@ -1417,7 +1417,7 @@ class DdsMessageProcessor:
 
 ```
 ##### 2.1.4.4 Основная логика <a name="Основная_логика"></a>
-Основную логику сервиса опишем в **app.py**.
+Основную логику сервиса опишем в cloud_service/service_dds/**src/app.py**.
 
 Для работы сервиса воспользуемся классом **BackgroundScheduler**, который будет запускать воркер с заданной периодичностью.
 
@@ -1455,7 +1455,7 @@ if __name__ == '__main__':
 
 ```
 
-Создадим файл **app_config.py**, который будет содержать параметры подключения к консьюмеру, продьюсеру в Kafka и базе данных в postgres:
+Создадим файл cloud_service/service_dds/src/**app_config.py**, который будет содержать параметры подключения к консьюмеру, продьюсеру в Kafka и базе данных в postgres:
 
 ```python
 import os
@@ -1526,9 +1526,9 @@ class AppConfig:
 
 #### 2.2.1 Работа с Postgres <a name="Работа_с_Postgres"></a>
 
-По аналогии опишем DDL для CDM-слоя в файле **cdm_migrations.py**.
+По аналогии опишем DDL для CDM-слоя в файле cloud_service/service_cdm/src/cdm_loader/repository/**cdm_migrations.py**.
 
-Логика заполнения таблиц находится в файле **cdm_repository.py** и выглядит следующим образом:
+Логика заполнения таблиц находится в файле cloud_service/service_cdm/src/cdm_loader/repository/**cdm_repository.py** и выглядит следующим образом:
 
 ```python
 from uuid import UUID
@@ -1644,7 +1644,7 @@ class RestaurantCategoryCounterRepository:
 ```
 #### 2.2.2 Работа с Kafka <a name="Работа_с_Kafka"></a>
 
-Логику приема сообщений опишем в файле **cdm_message_processor.py**:
+Логику приема сообщений опишем в файле cloud_service/service_cdm/src/cdm_loader/**cdm_message_processor_job.py**:
 
 ```python
 from datetime import datetime
@@ -1712,6 +1712,8 @@ class CdmMessageProcessor:
 
 На этом создание CDM-сервиса окончено.
 
+После окончания разработки сервисов были созданы соответствующие Docker-образы, которые в свою очередь были запушены в реджистри. 
+ 
 DDS и CDM Сервисы полностью готовы для релиза в Helm и дальнейшем автономной работы.
 
 ## 3 Выводы <a name="Выводы"></a>
