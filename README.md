@@ -153,13 +153,13 @@ type: application
 version: 0.1.0
 appVersion: "1.16.0"
 ```
-Создадим cloud_service/service_dds/app/**values.yaml** (параметры подключения изменены в целях безопасности):
+Создадим cloud_service/service_dds/app/**values.yaml** (параметры подключения здесь и в коде изменены в целях безопасности):
 
 ```python
 replicaCount: 1
 
 image:
-  repository: some_repository
+  repository: some_rep
   pullPolicy: IfNotPresent
   tag: "v2023-07-31-r1"
 
@@ -168,17 +168,18 @@ containerPort: 5000
 config:
   KAFKA_HOST: "some_kafka_host"
   KAFKA_PORT: "some_kafka_port"
-  KAFKA_CONSUMER_USERNAME: "some_kafka_consumer"
-  KAFKA_CONSUMER_PASSWORD: "some_kafka_pass"
-  KAFKA_CONSUMER_GROUP: "some_kafka_consumer_group"
+  KAFKA_CONSUMER_USERNAME: "producer_consumer"
+  KAFKA_CONSUMER_PASSWORD: "pass"
+  KAFKA_CONSUMER_GROUP: "main-consumer-group"
   KAFKA_SOURCE_TOPIC: "stg-service-orders"
   KAFKA_DESTINATION_TOPIC: "dds-service-orders"
 
-  PG_WAREHOUSE_HOST: "some_pg_host"
-  PG_WAREHOUSE_PORT: "some_pg_port"
-  PG_WAREHOUSE_DBNAME: "some_pg_db"
-  PG_WAREHOUSE_USER: "some_pg_user"
-  PG_WAREHOUSE_PASSWORD: "some_pg_pass"
+  PG_WAREHOUSE_HOST: "pg_host"
+  PG_WAREHOUSE_PORT: "port"
+  PG_WAREHOUSE_DBNAME: "some_db"
+  PG_WAREHOUSE_USER: "konstantin"
+  PG_WAREHOUSE_PASSWORD: "pass"
+
 
 
 imagePullSecrets: []
@@ -1724,8 +1725,3 @@ DDS и CDM Сервисы полностью готовы для релиза в
 - Разработана схема DDS-слоях по модели Data Vault
 - Написан DDS-сервис, вычитывающий данные из топика Kafka, сохраняющий их в DDS-слой БД Postgres и передающий их в новый топик Kafka
 - Написан CDM-сервис, забирающий данные из топика Kafka и сохраняющий их в CDM-слой БД Postgres
-
-----------ТОЛЬКО ДЛЯ РЕВЬЮ-----------
-
-Ссылка на реджистри с DDS-сервисом: cr.yandex/crpr3vvr1v5io35573fc/dds_service:v2023-07-31-r1
-Ссылка на реджистри с CDM-сервисом: cr.yandex/crpr3vvr1v5io35573fc/cdm_service:v2023-08-02-r1
