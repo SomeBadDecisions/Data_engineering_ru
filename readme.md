@@ -11,4 +11,7 @@
 - **Airflow**
 - **MongoDb**
 - **Vertica**
+- **Docker**
+- **Kubernetes**
+- **Redis**
 
