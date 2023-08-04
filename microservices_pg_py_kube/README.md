@@ -9,11 +9,11 @@
 		- 2.2.4 [DDS-сервис](#DDS-сервис)
 			- 2.2.4.1 [Создание подключений](#Создание_подключений)
 			- 2.2.4.2 [Работа с Postgres](#Работа_с_Postgres)
-			- 2.2.4.3 [Работа_с_Kafka](#Работа_с_Kafka)
+			- 2.2.4.3 [Работа с Kafka](#Работа_с_Kafka)
 			- 2.2.4.4 [Основная логика](#Основная_логика)
 	- 2.2 [CDM](#CDM)
-		- 2.2.1 [Работа с Postgres](#Работа_с_Postgres)
-		- 2.2.2 [Работа с Kafka](#Работа_с_Kafka)
+		- 2.2.1 [Работа с Postgres](#Работа_с_Postgres_2)
+		- 2.2.2 [Работа с Kafka](#Работа_с_Kafka_2)
 - 3 [Выводы](#Выводы)
 
 <a id="Описание"></a>
@@ -1537,7 +1537,7 @@ class AppConfig:
 
 Отличаться будет логика заполнения таблиц в Postgres и приема данных из топика Kafka.
 
-<a id="Работа_с_Postgres"></a>
+<a id="Работа_с_Postgres_2"></a>
 #### 2.2.1 Работа с Postgres 
 
 По аналогии опишем DDL для CDM-слоя в файле cloud_service/service_cdm/src/cdm_loader/repository/**cdm_migrations.py**.
@@ -1656,7 +1656,7 @@ class RestaurantCategoryCounterRepository:
                 )
 
 ```
-<a id="Работа_с_Kafka"></a>
+<a id="Работа_с_Kafka_2"></a>
 #### 2.2.2 Работа с Kafka 
 
 Логику приема сообщений опишем в файле cloud_service/service_cdm/src/cdm_loader/**cdm_message_processor_job.py**:
