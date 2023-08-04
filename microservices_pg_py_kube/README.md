@@ -16,7 +16,8 @@
 		- 2.2.2 [Работа с Kafka](#Работа_с_Kafka)
 - 3 [Выводы](#Выводы)
 
-## 1 Описание <a name="Описание"></a>
+<a id="Описание"></a>
+## 1 Описание 
 
 В рамках данного проекта необходимо разработать хранилище данных для агрегатора доставки еды. Собственных мощностей у компании нет, 
 поэтому для решения задачи нужно воспользоваться облачным сервисом. В данном случае был выбрал **Yandex.Cloud**. 
@@ -56,11 +57,14 @@
 
 Ранее мной уже был разработан первый микросервис для STG-слоя: /cloud_service/**service_stg**.
 
-## 2 Создание микросервисов <a name="Создание_микросервисов"></a>
+<a id="Создание_микросервисов"></a>
+## 2 Создание микросервисов 
 
-### 2.1 DDS <a name="DDS"></a>
+<a id="DDS"></a>
+### 2.1 DDS 
 
-#### 2.1.1 Docker-image <a name="Docker-image"></a>
+<a id="Docker-image"></a>
+#### 2.1.1 Docker-image 
 
 Для начала создадим docker-образ будущего сервиса.
 
@@ -105,7 +109,8 @@ ENTRYPOINT ["python"]
 CMD ["app.py"]
 ```
 
-#### 2.1.2 Docker-compose <a name="Docker-compose"></a>
+<a id="Docker-compose"></a>
+#### 2.1.2 Docker-compose 
 
 Добавим описание DDS-сервиса в cloud_service/**docker-compose.yaml**:
 
@@ -139,7 +144,8 @@ dds_service:
       - "5012:5000"
     restart: unless-stopped
 ```
-#### 2.1.3 Helm-chart <a name="Helm-chart"></a>
+<a id="Helm-chart"></a>
+#### 2.1.3 Helm-chart 
 
 Подготовим файлы для релиза через Helm.
 
@@ -197,9 +203,11 @@ resources:
     memory: 128Mi
 ```
 
-#### 2.1.4 DDS-сервис <a name="DDS-сервис"></a>
+<a id="DDS-сервис"></a>
+#### 2.1.4 DDS-сервис 
 
-##### 2.1.4.1 Создание подключений <a name="Создание_подключений"></a>
+<a id="Создание_подключений"></a>
+##### 2.1.4.1 Создание подключений 
 
 Для начала создадим все необходимые подключения. Для DDS-слоя это postgres и kafka.
 
@@ -326,7 +334,8 @@ class PgConnect:
 
 ```
 
-##### 2.1.4.2 Работа с Postgres <a name="Работа_с_Postgres"></a>
+<a id="Работа_с_Postgres"></a>
+##### 2.1.4.2 Работа с Postgres 
 Далее напишем функции для заполнения таблиц DDS-слоя в Postgres и положим в файл cloud_service/service_dds/src/dds_loader/repository/**dds_repository.py**:
 
 ```python
@@ -1291,7 +1300,8 @@ class DdsMigrator:
         )
 
 ```
-##### 2.1.4.3 Работа с Kafka <a name="Работа_с_Kafka"></a>
+<a id="Работа_с_Kafka"></a>
+##### 2.1.4.3 Работа с Kafka 
 
 Перейдем к передаче данных в Kafka. Логику приема данных и их последующей передачи в новый топик опишем в файле cloud_service/service_dds/src/dds_loader/**dds_message_processor_job.py**:
 
@@ -1417,7 +1427,8 @@ class DdsMessageProcessor:
         return products
 
 ```
-##### 2.1.4.4 Основная логика <a name="Основная_логика"></a>
+<a id="Основная_логика"></a>
+##### 2.1.4.4 Основная логика 
 Основную логику сервиса опишем в cloud_service/service_dds/**src/app.py**.
 
 Для работы сервиса воспользуемся классом **BackgroundScheduler**, который будет запускать воркер с заданной периодичностью.
@@ -1519,13 +1530,15 @@ class AppConfig:
 
 На этом разработка DDS-сервиса завершена.
 
-### 2.2 CDM <a name="CDM"></a>
+<a id="CDM"></a>
+### 2.2 CDM 
 
 Большинство шагов для создания CDM-сервиса будут аналогичными, поэтому подробно расписывать их не будем.
 
 Отличаться будет логика заполнения таблиц в Postgres и приема данных из топика Kafka.
 
-#### 2.2.1 Работа с Postgres <a name="Работа_с_Postgres"></a>
+<a id="Работа_с_Postgres"></a>
+#### 2.2.1 Работа с Postgres 
 
 По аналогии опишем DDL для CDM-слоя в файле cloud_service/service_cdm/src/cdm_loader/repository/**cdm_migrations.py**.
 
@@ -1643,7 +1656,8 @@ class RestaurantCategoryCounterRepository:
                 )
 
 ```
-#### 2.2.2 Работа с Kafka <a name="Работа_с_Kafka"></a>
+<a id="Работа_с_Kafka"></a>
+#### 2.2.2 Работа с Kafka 
 
 Логику приема сообщений опишем в файле cloud_service/service_cdm/src/cdm_loader/**cdm_message_processor_job.py**:
 
